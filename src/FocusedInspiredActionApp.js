@@ -307,53 +307,54 @@ const FocusedInspiredActionApp = () => {
   };
 
   // AI Coaching Functions
-  const sendMessage = async () => {
-    if (!newMessage.trim() || !user) return;
+const sendMessage = async () => {
+  if (!newMessage.trim() || !user) return;
+  
+  const userMessage = {
+    id: Date.now(),
+    role: 'user',
+    content: newMessage,
+    timestamp: new Date()
+  };
+
+  setChatMessages(prev => [...prev, userMessage]);
+  setNewMessage('');
+  setLoading(true);
+  
+  try {
+    // Real AI call to BuildShip
+    const response = await fetch('https://your-buildship-project.buildship.app/ai-coach', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        user_id: user.id,
+        message: newMessage,
+        conversation_id: 'current-session',
+        user_context: {
+          goals: goals,
+          tasks: tasks,
+          onboarding_data: onboardingData
+        }
+      })
+    });
     
-    try {
-      const userMessage = {
-        id: Date.now(),
-        role: 'user',
-        content: newMessage,
-        timestamp: new Date()
-      };
-
-      setChatMessages(prev => [...prev, userMessage]);
-      setNewMessage('');
-      setLoading(true);
-      
-      setTimeout(() => {
-        const aiResponse = {
-          id: Date.now() + 1,
-          role: 'assistant',
-          content: generateCoachResponse(newMessage),
-          timestamp: new Date()
-        };
-        setChatMessages(prev => [...prev, aiResponse]);
-        setLoading(false);
-      }, 1000);
-      
-    } catch (error) {
-      console.error('Error sending message:', error);
-      setLoading(false);
-    }
-  };
-
-  const generateCoachResponse = (message) => {
-    const responses = [
-      "Based on your goals, I recommend breaking this down into smaller, actionable steps. What's the first 15-minute task you could do today?",
-      "That sounds challenging! Let's apply the 2-minute rule - if it takes less than 2 minutes, do it now. For bigger tasks, let's time-block them.",
-      "Great progress! Remember, consistency beats perfection. What's one small habit you can commit to daily?",
-      "I notice you might be feeling overwhelmed. Let's prioritize using the Eisenhower Matrix - what's urgent AND important right now?",
-      "Excellent question! Based on productivity research, I suggest batching similar tasks together. Would that work for your situation?",
-      "I love your commitment! Consider the 80/20 rule - what 20% of actions will drive 80% of your results?",
-      "Perfect timing for this question! Let's apply time-blocking: when specifically will you tackle this task?",
-      "That's a common challenge! Try the Pomodoro Technique - 25 minutes of focused work, then a 5-minute break.",
-      "I can help you prioritize! Which of these tasks aligns most closely with your top 3 life priorities?",
-      "Smart thinking! Remember, progress over perfection. What's the smallest step you can take right now?"
-    ];
-    return responses[Math.floor(Math.random() * responses.length)];
-  };
+    const result = await response.json();
+    
+    const aiResponse = {
+      id: Date.now() + 1,
+      role: 'assistant',
+      content: result.response,
+      timestamp: new Date()
+    };
+    
+    setChatMessages(prev => [...prev, aiResponse]);
+  } catch (error) {
+    console.error('AI Error:', error);
+    // Fallback to simulated response
+  } finally {
+    setLoading(false);
+  }
+};
 
   // Onboarding Functions
   const handleOnboardingAnswer = async (answer) => {
