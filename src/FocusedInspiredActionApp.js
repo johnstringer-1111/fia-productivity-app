@@ -462,7 +462,7 @@ const FocusedInspiredActionApp = () => {
   const bookCoachingCall = async () => {
     try {
       alert('1-Hour Aligned Accountability & Success Coaching call booking!\n\nPrice: $197\nYou will be redirected to schedule your session.');
-      window.open('https://calendly.com/jsi-sessions/guidance-session', '_blank');
+      window.open('https://www.johnstringerinc.com/aligned-accountability-success-coaching/', '_blank');
     } catch (error) {
       console.error('Error booking call:', error);
     }
@@ -795,7 +795,7 @@ const FocusedInspiredActionApp = () => {
               </button>
             )}
             <button
-              onClick={() => window.open('https://calendly.com/jsi-sessions/guidance-session', '_blank')}
+              onClick={() => window.open('https://www.johnstringerinc.com/focused-inspired-action-calls/', '_blank')}
               className="border-2 border-white text-white px-8 py-4 rounded-full font-semibold text-lg hover:bg-white hover:text-indigo-900 transition-colors"
             >
               Join Our F.I.A. Calls
@@ -865,7 +865,7 @@ const FocusedInspiredActionApp = () => {
             </div>
             <div className="flex items-center space-x-2 sm:space-x-4">
               <button
-                onClick={() => window.open('https://calendly.com/jsi-sessions/guidance-session', '_blank')}
+                onClick={() => window.open('https://www.johnstringerinc.com/focused-inspired-action-calls/', '_blank')}
                 className="bg-indigo-600 text-white px-3 py-2 rounded-lg hover:bg-indigo-700 transition-colors flex items-center text-sm"
               >
                 <Phone className="h-4 w-4 mr-1" />
@@ -1199,7 +1199,7 @@ const FocusedInspiredActionApp = () => {
                 </button>
                 
                 <button
-                  onClick={() => window.open('https://calendly.com/jsi-sessions/guidance-session', '_blank')}
+                  onClick={() => window.open('https://www.johnstringerinc.com/focused-inspired-action-calls/', '_blank')}
                   className="w-full bg-green-100 text-green-700 p-3 rounded-lg hover:bg-green-200 transition-colors text-sm font-medium"
                 >
                   🎯 Join Daily F.I.A. Call
