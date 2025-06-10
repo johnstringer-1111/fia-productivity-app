@@ -394,64 +394,49 @@ const FocusedInspiredActionApp = () => {
   };
 
   // Send Message Function - THIS WAS MISSING!
-  const sendMessage = async () => {
-    if (!newMessage.trim()) return;
-    
+ const sendMessage = async () => {
+  if (!newMessage.trim() || !user) return;
+  
+  try {
     const userMessage = {
       id: Date.now(),
       role: 'user',
-      content: newMessage.trim(),
+      content: newMessage,
       timestamp: new Date()
     };
 
-    // Add user message immediately
     setChatMessages(prev => [...prev, userMessage]);
     setNewMessage('');
-    setChatLoading(true);
-    setApiError(null);
-
-    try {
-      // Prepare user data for AI coach
-      const userData = {
-        userGoals: goals.map(g => g.title).join(', '),
-        recentTasks: tasks.filter(t => t.status === 'pending').slice(0, 5).map(t => t.title).join(', '),
-        userChallenges: onboardingData.challenges || 'General productivity challenges',
-        workStyle: onboardingData.workStyle || 'Flexible work style',
-        prompt: userMessage.content,
-        sessionId: user?.id || 'default-session'
-      };
-
-      const aiResponse = await getAICoachResponse(userData);
-
-      // Add AI response
-      const assistantMessage = {
+    setLoading(true);
+    
+    // Call real AI coaching API
+    const response = await fetch('https://your-buildship-id.buildship.app/ai-coach', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        user_id: user.id,
+        message: newMessage,
+        context: { goals, tasks, onboardingData }
+      })
+    });
+    
+    const result = await response.json();
+    
+    if (result.success) {
+      const aiResponse = {
         id: Date.now() + 1,
         role: 'assistant',
-        content: aiResponse,
+        content: result.response,
         timestamp: new Date()
       };
-
-      setChatMessages(prev => [...prev, assistantMessage]);
-      
-    } catch (error) {
-      console.error('Error getting AI response:', error);
-      
-      // Add error message to chat
-      const errorMessage = {
-        id: Date.now() + 1,
-        role: 'assistant',
-        content: "I apologize, but I'm having trouble connecting to my AI brain right now. Please try again in a moment, or feel free to continue asking questions!",
-        timestamp: new Date(),
-        isError: true
-      };
-
-      setChatMessages(prev => [...prev, errorMessage]);
-      setApiError('Failed to get AI response. Please check your internet connection and try again.');
-      
-    } finally {
-      setChatLoading(false);
+      setChatMessages(prev => [...prev, aiResponse]);
     }
-  };
+  } catch (error) {
+    console.error('AI coaching error:', error);
+  } finally {
+    setLoading(false);
+  }
+};
 
   // Handle Enter key in chat input
   const handleKeyPress = (e) => {
