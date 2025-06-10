@@ -26,15 +26,10 @@ const FocusedInspiredActionApp = () => {
   const [subscription, setSubscription] = useState(null);
   const [authMode, setAuthMode] = useState('signin');
   const [authData, setAuthData] = useState({ email: '', password: '', confirmPassword: '' });
-  const [chatLoading, setChatLoading] = useState(false);
-  const [apiError, setApiError] = useState(null);
   
   // Voice Recording
   const [mediaRecorder, setMediaRecorder] = useState(null);
   const [audioChunks, setAudioChunks] = useState([]);
-  
-  // Chat scroll ref
-  const chatEndRef = useRef(null);
   
   // Task Form State
   const [newTask, setNewTask] = useState({
@@ -109,15 +104,6 @@ const FocusedInspiredActionApp = () => {
       multiple: true
     }
   ];
-
-  // Scroll to bottom of chat
-  const scrollToBottom = () => {
-    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  };
-
-  useEffect(() => {
-    scrollToBottom();
-  }, [chatMessages]);
 
   // Voice Recording Functions
   const startRecording = async () => {
@@ -195,20 +181,6 @@ const FocusedInspiredActionApp = () => {
   const handleAuth = async () => {
     try {
       setLoading(true);
-      
-      // Basic validation
-      if (!authData.email || !authData.password) {
-        alert('Please fill in all fields');
-        setLoading(false);
-        return;
-      }
-      
-      if (authMode === 'signup' && authData.password !== authData.confirmPassword) {
-        alert('Passwords do not match');
-        setLoading(false);
-        return;
-      }
-      
       const simulatedUser = { 
         id: 'user-' + Date.now(), 
         email: authData.email,
@@ -237,7 +209,6 @@ const FocusedInspiredActionApp = () => {
     setTasks([]);
     setChatMessages([]);
     setSubscription(null);
-    setApiError(null);
   };
 
   // Data Loading Functions
@@ -286,14 +257,6 @@ const FocusedInspiredActionApp = () => {
         weekly_focus_time: 1240,
         completion_rate: 0.73
       });
-
-      // Add welcome message to chat
-      setChatMessages([{
-        id: 1,
-        role: 'assistant',
-        content: "Welcome to F.I.A.! I'm your AI productivity coach. How can I help you stay focused and take inspired action today?",
-        timestamp: new Date()
-      }]);
       
     } catch (error) {
       console.error('Error loading user data:', error);
@@ -303,11 +266,6 @@ const FocusedInspiredActionApp = () => {
   // Task Management Functions
   const createTask = async () => {
     try {
-      if (!newTask.title.trim()) {
-        alert('Please enter a task title');
-        return;
-      }
-
       const task = {
         ...newTask,
         id: Date.now(),
@@ -329,7 +287,6 @@ const FocusedInspiredActionApp = () => {
       setShowTaskForm(false);
     } catch (error) {
       console.error('Error creating task:', error);
-      alert('Error creating task. Please try again.');
     }
   };
 
@@ -349,102 +306,53 @@ const FocusedInspiredActionApp = () => {
     }
   };
 
-  // AI Coaching Functions
-  const getAICoachResponse = async (userData) => {
-    const endpointUrl = 'https://nhpl89.buildship.run/executeWorkflow/DjpYEJJCD62ZKLZuy2V6/9a584791-6106-4ccf-b164-67986a9316cb';
+// REPLACE your entire sendMessage function with this:
 
-    try {
-      const response = await fetch(endpointUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          userGoals: userData.userGoals || goals.map(g => g.title).join(', '),
-          recentTasks: userData.recentTasks || tasks.slice(0, 3).map(t => t.title).join(', '),
-          userChallenges: userData.userChallenges || onboardingData.challenges || 'General productivity',
-          workStyle: userData.workStyle || onboardingData.workStyle || 'Flexible approach',
-          prompt: userData.prompt,
-          sessionId: userData.sessionId || user?.id || 'default-session',
-        }),
-      });
+const sendMessage = async (message) => {
+  if (!message.trim()) return;
 
-      if (!response.ok) {
-        throw new Error(`BuildShip API error: ${response.status} ${response.statusText}`);
-      }
+  const userMessage = { role: 'user', content: message, timestamp: new Date() };
+  setChatMessages(prev => [...prev, userMessage]);
+  setInputMessage('');
+  setIsLoading(true);
 
-      const data = await response.json();
-      
-      // Handle different possible response formats
-      if (data.aiCoachResponse) {
-        return data.aiCoachResponse;
-      } else if (data.response) {
-        return data.response;
-      } else if (data.message) {
-        return data.message;
-      } else if (typeof data === 'string') {
-        return data;
-      } else {
-        throw new Error('Unexpected response format from AI coach');
-      }
-    } catch (error) {
-      console.error('AI Coach API Error:', error);
-      throw error;
-    }
-  };
-
-  // Send Message Function - THIS WAS MISSING!
- const sendMessage = async () => {
-  if (!newMessage.trim() || !user) return;
-  
   try {
-    const userMessage = {
-      id: Date.now(),
-      role: 'user',
-      content: newMessage,
-      timestamp: new Date()
-    };
-
-    setChatMessages(prev => [...prev, userMessage]);
-    setNewMessage('');
-    setLoading(true);
-    
-    // Call real AI coaching API
-    const response = await fetch('https://your-buildship-id.buildship.app/ai-coach', {
+    // 🚀 REAL AI CALL (replaces generateCoachResponse)
+    const response = await fetch('/api/ai-coach', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+      },
       body: JSON.stringify({
-        user_id: user.id,
-        message: newMessage,
-        context: { goals, tasks, onboardingData }
+        message: message,
+        userGoals: goals,
+        userTasks: tasks
       })
     });
-    
-    const result = await response.json();
-    
-    if (result.success) {
-      const aiResponse = {
-        id: Date.now() + 1,
-        role: 'assistant',
-        content: result.response,
-        timestamp: new Date()
-      };
-      setChatMessages(prev => [...prev, aiResponse]);
-    }
-  } catch (error) {
-    console.error('AI coaching error:', error);
-  } finally {
-    setLoading(false);
-  }
-};
 
-  // Handle Enter key in chat input
-  const handleKeyPress = (e) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      sendMessage();
-    }
-  };
+    const data = await response.json();
+    const aiResponse = data.success ? data.response : "Let's focus on your most important task right now! 🎯";
+
+    const aiMessage = { 
+      role: 'assistant', 
+      content: aiResponse, 
+      timestamp: new Date() 
+    };
+    setChatMessages(prev => [...prev, aiMessage]);
+
+  } catch (error) {
+    console.error('Error:', error);
+    
+    // Fallback message
+    const fallbackMessage = {
+      role: 'assistant',
+      content: "I'm here to help you stay productive! What's your most important task right now? 💪",
+      timestamp: new Date()
+    };
+    setChatMessages(prev => [...prev, fallbackMessage]);
+  } finally {
+    setIsLoading(false);
+  }
 
   // Onboarding Functions
   const handleOnboardingAnswer = async (answer) => {
@@ -526,15 +434,6 @@ const FocusedInspiredActionApp = () => {
       ];
 
       setTasks(initialTasks);
-
-      // Add welcome message after onboarding
-      setChatMessages([{
-        id: 1,
-        role: 'assistant',
-        content: `Welcome to F.I.A., ${user.full_name}! Based on your preferences for ${data.workStyle || 'productivity'}, I've created a personalized plan for you. How are you feeling about getting started?`,
-        timestamp: new Date()
-      }]);
-
     } catch (error) {
       console.error('Error generating coaching plan:', error);
     }
@@ -562,7 +461,7 @@ const FocusedInspiredActionApp = () => {
   const bookCoachingCall = async () => {
     try {
       alert('1-Hour Aligned Accountability & Success Coaching call booking!\n\nPrice: $197\nYou will be redirected to schedule your session.');
-      window.open('https://www.johnstringerinc.com/aligned-accountability-success-coaching/', '_blank');
+      window.open('https://calendly.com/jsi-sessions/aligned-accountability-success-coaching', '_blank');
     } catch (error) {
       console.error('Error booking call:', error);
     }
@@ -1221,18 +1120,6 @@ const FocusedInspiredActionApp = () => {
                 AI Productivity Coach
               </h2>
               
-              {apiError && (
-                <div className="bg-red-50 border border-red-200 rounded-lg p-3 mb-4">
-                  <p className="text-red-700 text-sm">{apiError}</p>
-                  <button
-                    onClick={() => setApiError(null)}
-                    className="text-red-600 text-sm underline mt-1"
-                  >
-                    Dismiss
-                  </button>
-                </div>
-              )}
-              
               <div className="h-64 overflow-y-auto mb-4 space-y-3 border rounded-lg p-3 bg-gray-50">
                 {chatMessages.length === 0 && (
                   <div className="text-center py-8">
@@ -1248,31 +1135,27 @@ const FocusedInspiredActionApp = () => {
                 {chatMessages.map((message, index) => (
                   <div
                     key={index}
-                    className={`p-3 rounded-lg max-w-[85%] ${
+                    className={`p-3 rounded-lg max-w-[80%] ${
                       message.role === 'user'
                         ? 'bg-indigo-100 text-indigo-900 ml-auto'
-                        : message.isError
-                          ? 'bg-red-50 text-red-800 border border-red-200'
-                          : 'bg-white text-gray-900 border'
+                        : 'bg-white text-gray-900 border'
                     }`}
                   >
-                    <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+                    <p className="text-sm">{message.content}</p>
                     <span className="text-xs text-gray-500 mt-1 block">
                       {message.timestamp.toLocaleTimeString()}
                     </span>
                   </div>
                 ))}
-                {chatLoading && (
+                {loading && (
                   <div className="bg-white border rounded-lg p-3 max-w-[80%]">
                     <div className="flex items-center space-x-2">
                       <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" />
                       <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }} />
                       <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }} />
-                      <span className="text-sm text-gray-500 ml-2">AI is thinking...</span>
                     </div>
                   </div>
                 )}
-                <div ref={chatEndRef} />
               </div>
               
               <div className="flex space-x-2">
@@ -1282,15 +1165,15 @@ const FocusedInspiredActionApp = () => {
                   onChange={(e) => setNewMessage(e.target.value)}
                   placeholder="Ask your coach anything..."
                   className="flex-1 p-2 border border-gray-300 rounded-lg focus:outline-none focus:border-indigo-300 text-sm"
-                  onKeyPress={handleKeyPress}
-                  disabled={chatLoading}
+                  onKeyPress={(e) => e.key === 'Enter' && sendMessage()}
+                  disabled={loading}
                 />
                 <button
                   onClick={sendMessage}
-                  disabled={chatLoading || !newMessage.trim()}
+                  disabled={loading || !newMessage.trim()}
                   className="bg-indigo-600 text-white px-3 py-2 rounded-lg hover:bg-indigo-700 transition-colors disabled:bg-gray-300"
                 >
-                  {chatLoading ? '...' : 'Send'}
+                  Send
                 </button>
               </div>
             </div>
