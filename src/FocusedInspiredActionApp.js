@@ -307,54 +307,31 @@ const FocusedInspiredActionApp = () => {
   };
 
   // AI Coaching Functions
-const sendMessage = async () => {
-  if (!newMessage.trim() || !user) return;
-  
-  const userMessage = {
-    id: Date.now(),
-    role: 'user',
-    content: newMessage,
-    timestamp: new Date()
-  };
+  const endpointUrl = 'https://nhpl89.buildship.run/executeWorkflow/DjpYEJJCD62ZKLZuy2V6/9a584791-6106-4ccf-b164-67986a9316cb';
 
-  setChatMessages(prev => [...prev, userMessage]);
-  setNewMessage('');
-  setLoading(true);
-  
-  try {
-    // Real AI call to BuildShip
-    const response = await fetch('https://your-buildship-project.buildship.app/ai-coach', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        user_id: user.id,
-        message: newMessage,
-        conversation_id: 'current-session',
-        user_context: {
-          goals: goals,
-          tasks: tasks,
-          onboarding_data: onboardingData
-        }
-      })
-    });
-    
-    const result = await response.json();
-    
-    const aiResponse = {
-      id: Date.now() + 1,
-      role: 'assistant',
-      content: result.response,
-      timestamp: new Date()
-    };
-    
-    setChatMessages(prev => [...prev, aiResponse]);
-  } catch (error) {
-    console.error('AI Error:', error);
-    // Fallback to simulated response
-  } finally {
-    setLoading(false);
+  const response = await fetch(endpointUrl, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      userGoals: userData.userGoals,
+      recentTasks: userData.recentTasks,
+      userChallenges: userData.userChallenges,
+      workStyle: userData.workStyle,
+      prompt: userData.prompt,
+      sessionId: userData.sessionId,
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`BuildShip API error: ${response.statusText}`);
   }
-};
+
+  // Assuming the API returns JSON with the coaching reply
+  const data = await response.json();
+  return data.aiCoachResponse;
+}
 
   // Onboarding Functions
   const handleOnboardingAnswer = async (answer) => {
