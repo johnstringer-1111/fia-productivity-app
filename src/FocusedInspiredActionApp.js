@@ -307,6 +307,7 @@ const FocusedInspiredActionApp = () => {
   };
 
   // AI Coaching Functions
+async function getAICoachResponse(userData) {
   const endpointUrl = 'https://nhpl89.buildship.run/executeWorkflow/DjpYEJJCD62ZKLZuy2V6/9a584791-6106-4ccf-b164-67986a9316cb';
 
   const response = await fetch(endpointUrl, {
@@ -332,7 +333,6 @@ const FocusedInspiredActionApp = () => {
   const data = await response.json();
   return data.aiCoachResponse;
 }
-
   // Onboarding Functions
   const handleOnboardingAnswer = async (answer) => {
     const currentQuestion = onboardingQuestions[onboardingStep];
