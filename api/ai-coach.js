@@ -6,7 +6,7 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const { message, userGoals, userTasks } = req.body;
+  const { message, userGoals, userTasks, onboardingData } = req.body;
   console.log('📥 Received message:', message);
 
   if (!message) {
@@ -16,14 +16,23 @@ export default async function handler(req, res) {
   console.log('🔑 API Key exists:', !!process.env.CLAUDE_API_KEY);
 
   try {
-    const prompt = `You are F.I.A. (Focused Inspired Action), an AI productivity coach. 
+    const prompt = `You are F.I.A. (Focused Inspired Action), an AI productivity coach.
 
-User's Current Goals: ${userGoals?.map(g => g.title).join(', ') || 'None set'}
-User's Recent Tasks: ${userTasks?.slice(0, 3).map(t => t.title).join(', ') || 'None'}
+CURRENT USER CONTEXT:
+• Goals: ${userGoals?.map(g => g.title).join(', ') || 'None set'}
+• Recent Tasks: ${userTasks?.slice(0, 3).map(t => t.title).join(', ') || 'None'}
 
-User Message: ${message}
+USER PREFERENCES & STYLE:
+• Work Style: ${onboardingData?.workStyle || 'Not specified'}
+• Top Priorities: ${onboardingData?.priorities || 'Not specified'}
+• Main Challenges: ${onboardingData?.challenges?.join(', ') || 'Not specified'}
+• 90-Day Goals: ${onboardingData?.goals || 'Not specified'}
+• Best Work Time: ${onboardingData?.schedule || 'Not specified'}
+• Accountability Style: ${onboardingData?.accountability?.join(', ') || 'Not specified'}
 
-Provide helpful, actionable productivity coaching. Be encouraging and specific. Keep responses under 150 words.`;
+USER MESSAGE: ${message}
+
+Based on their personal work style and challenges, provide specific, actionable productivity coaching. Reference their preferences when relevant. Keep responses under 150 words and be encouraging.`;
 
     console.log('📝 Sending prompt to Claude...');
 
