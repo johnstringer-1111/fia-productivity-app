@@ -990,6 +990,24 @@ const handleSignOut = async () => {
       });
 
       alert('Simpleology disconnected');
+    } catch (error) {
+      alert('Failed to disconnect Simpleology');
+    }
+  };
+  };
+
+  const disconnectSimpleology = async () => {
+    try {
+      setSimpleologyConnected(false);
+      setSimpleologyApiKey('');
+      
+      // Remove from user profile
+      await updateUserProfile(user.id, {
+        simpleology_api_key: null,
+        simpleology_connected: false
+      });
+
+      alert('Simpleology disconnected');
   // Utility Functions
   const getFilteredTasks = () => {
     return tasks.filter(task => {
