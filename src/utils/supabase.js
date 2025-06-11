@@ -1,59 +1,150 @@
 // src/utils/supabase.js
+// SECURE VERSION - Uses environment variables instead of hardcoded keys
 import { createClient } from '@supabase/supabase-js';
 
+// Use environment variables (secure approach)
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 );
 
-// Generate or get persistent user ID
-export const getUserId = () => {
-  let userId = localStorage.getItem('fia_user_id');
-  if (!userId) {
-    userId = `user_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-    localStorage.setItem('fia_user_id', userId);
+// Auth Functions
+export const signUp = async (email, password) => {
+  try {
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+    });
+
+    if (error) throw error;
+
+    // Create user profile automatically
+    if (data.user) {
+      await createUserProfile(data.user);
+    }
+
+    return { success: true, user: data.user };
+  } catch (error) {
+    console.error('Sign up error:', error);
+    return { success: false, error: error.message };
   }
-  return userId;
 };
 
-// Save a chat message to database
-export const saveChatMessage = async (messageType, content, context = {}) => {
+export const signIn = async (email, password) => {
   try {
-    const userId = getUserId();
-    const conversationId = localStorage.getItem('fia_conversation_id') || 
-                          `conv_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-    
-    // Store conversation ID for this session
-    localStorage.setItem('fia_conversation_id', conversationId);
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
 
+    if (error) throw error;
+    return { success: true, user: data.user };
+  } catch (error) {
+    console.error('Sign in error:', error);
+    return { success: false, error: error.message };
+  }
+};
+
+export const signOut = async () => {
+  try {
+    const { error } = await supabase.auth.signOut();
+    if (error) throw error;
+    return { success: true };
+  } catch (error) {
+    console.error('Sign out error:', error);
+    return { success: false, error: error.message };
+  }
+};
+
+export const getCurrentUser = () => {
+  return supabase.auth.getUser();
+};
+
+export const onAuthChange = (callback) => {
+  return supabase.auth.onAuthStateChange(callback);
+};
+
+// User Profile Functions
+const createUserProfile = async (user) => {
+  try {
+    const { data, error } = await supabase
+      .from('user_profiles')
+      .upsert([{
+        id: user.id,
+        email: user.email,
+        full_name: user.email.split('@')[0],
+        onboarding_completed: false,
+        onboarding_data: {},
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      }]);
+
+    if (error) throw error;
+    return { success: true, data };
+  } catch (error) {
+    console.error('Error creating user profile:', error);
+    return { success: false, error };
+  }
+};
+
+export const updateUserProfile = async (userId, updates) => {
+  try {
+    const { data, error } = await supabase
+      .from('user_profiles')
+      .update({
+        ...updates,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', userId);
+
+    if (error) throw error;
+    return { success: true, data };
+  } catch (error) {
+    console.error('Error updating user profile:', error);
+    return { success: false, error };
+  }
+};
+
+export const getUserProfile = async (userId) => {
+  try {
+    const { data, error } = await supabase
+      .from('user_profiles')
+      .select('*')
+      .eq('id', userId)
+      .single();
+
+    if (error) throw error;
+    return { success: true, data };
+  } catch (error) {
+    console.error('Error getting user profile:', error);
+    return { success: false, error };
+  }
+};
+
+// Chat Functions
+export const saveChatMessage = async (userId, messageType, content, context = {}) => {
+  try {
     const { data, error } = await supabase
       .from('ai_conversations')
       .insert([{
         user_id: userId,
-        conversation_id: conversationId,
-        message_type: messageType, // 'user' or 'assistant'
+        conversation_id: `conv_${userId}_${new Date().toISOString().split('T')[0]}`, // Daily conversation groups
+        message_type: messageType,
         content: content,
         context: context,
         voice_input: false
       }]);
 
-    if (error) {
-      console.error('Error saving message:', error);
-      return { success: false, error };
-    }
-
+    if (error) throw error;
     return { success: true, data };
   } catch (error) {
-    console.error('Database error:', error);
+    console.error('Error saving message:', error);
     return { success: false, error };
   }
 };
 
-// Load conversation history
-export const loadChatHistory = async (limit = 20) => {
+export const loadChatHistory = async (userId, limit = 20) => {
   try {
-    const userId = getUserId();
-    
     const { data, error } = await supabase
       .from('ai_conversations')
       .select('*')
@@ -61,12 +152,8 @@ export const loadChatHistory = async (limit = 20) => {
       .order('created_at', { ascending: true })
       .limit(limit);
 
-    if (error) {
-      console.error('Error loading chat history:', error);
-      return { success: false, error };
-    }
+    if (error) throw error;
 
-    // Convert to your app's message format
     const messages = data.map(row => ({
       role: row.message_type,
       content: row.content,
@@ -76,16 +163,13 @@ export const loadChatHistory = async (limit = 20) => {
 
     return { success: true, messages };
   } catch (error) {
-    console.error('Database error:', error);
+    console.error('Error loading chat history:', error);
     return { success: false, error };
   }
 };
 
-// Get recent messages for AI context (last 5 messages)
-export const getRecentMessages = async () => {
+export const getRecentMessages = async (userId) => {
   try {
-    const userId = getUserId();
-    
     const { data, error } = await supabase
       .from('ai_conversations')
       .select('message_type, content')
@@ -93,18 +177,98 @@ export const getRecentMessages = async () => {
       .order('created_at', { ascending: false })
       .limit(5);
 
-    if (error) {
-      console.error('Error loading recent messages:', error);
-      return [];
-    }
+    if (error) throw error;
 
-    // Return in chronological order for AI context
     return data.reverse().map(row => ({
       role: row.message_type,
       content: row.content
     }));
   } catch (error) {
-    console.error('Database error:', error);
+    console.error('Error loading recent messages:', error);
     return [];
   }
 };
+
+// Goals and Tasks Functions
+export const saveGoals = async (userId, goals) => {
+  try {
+    const goalsToInsert = goals.map(goal => ({
+      user_id: userId,
+      title: goal.title,
+      description: goal.description,
+      priority: goal.priority,
+      status: goal.status || 'active',
+      progress: goal.progress || 0,
+      target_date: goal.deadline || null
+    }));
+
+    const { data, error } = await supabase
+      .from('goals')
+      .upsert(goalsToInsert);
+
+    if (error) throw error;
+    return { success: true, data };
+  } catch (error) {
+    console.error('Error saving goals:', error);
+    return { success: false, error };
+  }
+};
+
+export const loadGoals = async (userId) => {
+  try {
+    const { data, error } = await supabase
+      .from('goals')
+      .select('*')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+    return { success: true, data };
+  } catch (error) {
+    console.error('Error loading goals:', error);
+    return { success: false, error };
+  }
+};
+
+export const saveTasks = async (userId, tasks) => {
+  try {
+    const tasksToInsert = tasks.map(task => ({
+      user_id: userId,
+      title: task.title,
+      description: task.description,
+      priority: task.priority,
+      status: task.status || 'pending',
+      due_date: task.due_date || null,
+      estimated_duration: task.estimated_duration || null,
+      voice_input: task.voice_input || false
+    }));
+
+    const { data, error } = await supabase
+      .from('tasks')
+      .upsert(tasksToInsert);
+
+    if (error) throw error;
+    return { success: true, data };
+  } catch (error) {
+    console.error('Error saving tasks:', error);
+    return { success: false, error };
+  }
+};
+
+export const loadTasks = async (userId) => {
+  try {
+    const { data, error } = await supabase
+      .from('tasks')
+      .select('*')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+    return { success: true, data };
+  } catch (error) {
+    console.error('Error loading tasks:', error);
+    return { success: false, error };
+  }
+};
+
+export default supabase;
