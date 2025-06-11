@@ -1,15 +1,16 @@
 // src/utils/supabase.js
-// TEMPORARY HARDCODED VERSION - Replace with your actual Supabase values
+// FINAL VERSION - Using environment variables with fallback
 import { createClient } from '@supabase/supabase-js';
 
-// REPLACE THESE WITH YOUR ACTUAL VALUES (temporarily)
-const supabaseUrl = 'https://eukbotdgyqtcwrfwtwso.supabase.co'; // Your actual Supabase URL from context
-const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImV1a2JvdGRneXF0Y3dyZnd0d3NvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDk0Nzg4NzMsImV4cCI6MjA2NTA1NDg3M30.j30bPCjK0w2vB7anM8jL5-CJ3SFs0MbEieCcRIQZUog'; // REPLACE WITH YOUR ACTUAL ANON KEY
+// Get environment variables with fallback for debugging
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://eukbotdgyqtcwrfwtwso.supabase.co';
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImV1a2JvdGRneXF0Y3dyZnd0d3NvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDk0Nzg4NzMsImV4cCI6MjA2NTA1NDg3M30.j30bPCjK0w2vB7anM8jL5-CJ3SFs0MbEieCcRIQZUog'; // Replace with your actual key as fallback
+
+// Log for debugging (remove in production)
+console.log('🔗 Supabase URL source:', process.env.NEXT_PUBLIC_SUPABASE_URL ? 'environment variable' : 'fallback');
 
 // Create Supabase client
 const supabase = createClient(supabaseUrl, supabaseAnonKey);
-
-console.log('✅ Supabase client created with hardcoded values');
 
 // Auth Functions
 export const signUp = async (email, password) => {
@@ -117,7 +118,10 @@ export const getUserProfile = async (userId) => {
       .eq('id', userId)
       .single();
 
-    if (error) throw error;
+    if (error && error.code !== 'PGRST116') { // PGRST116 = no rows returned
+      throw error;
+    }
+
     return { success: true, data };
   } catch (error) {
     console.error('Error getting user profile:', error);
