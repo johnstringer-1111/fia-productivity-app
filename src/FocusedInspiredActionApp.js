@@ -126,16 +126,31 @@ const FocusedInspiredActionApp = () => {
     }
   ];
 
-// PRODUCTION AUTH FLOW - Clean and professional
+// BULLETPROOF AUTH FLOW - Handles cached sessions and conflicts
 useEffect(() => {
   let mounted = true;
   let authSubscription = null;
+  let timeoutId = null;
 
   const initializeAuth = async () => {
     try {
-      // Set up auth listener
+      // Immediate timeout protection
+      timeoutId = setTimeout(() => {
+        if (mounted) {
+          setLoading(false);
+          setCurrentView('home');
+        }
+      }, 6000); // 6 second max
+
+      // Set up auth listener first
       const { data: listener } = onAuthChange(async (event, session) => {
         if (!mounted) return;
+        
+        // Clear timeout when auth state changes
+        if (timeoutId) {
+          clearTimeout(timeoutId);
+          timeoutId = null;
+        }
         
         setAuthError('');
         
@@ -143,7 +158,6 @@ useEffect(() => {
           if (session?.user) {
             setUser(session.user);
             
-            // Handle new user signup
             if (event === 'SIGNED_UP') {
               await handleNewUserSetup(session.user);
             } else {
@@ -155,20 +169,33 @@ useEffect(() => {
         } catch (error) {
           setAuthError('Unable to load your account. Please try refreshing the page.');
           setLoading(false);
-          setCurrentView('dashboard');
+          setCurrentView('home');
         }
       });
 
       authSubscription = listener;
 
-      // Check for existing session on mount
-      const { data: { user } } = await getCurrentUser();
-      if (user && mounted) {
-        setUser(user);
-        await loadUserData(user.id);
-      } else if (mounted) {
-        setCurrentView('home');
-        setLoading(false);
+      // Check for existing session - with race condition protection
+      try {
+        const sessionCheck = await Promise.race([
+          getCurrentUser(),
+          new Promise((_, reject) => 
+            setTimeout(() => reject(new Error('Session check timeout')), 3000)
+          )
+        ]);
+
+        if (sessionCheck?.data?.user && mounted) {
+          setUser(sessionCheck.data.user);
+          await loadUserData(sessionCheck.data.user.id);
+        } else if (mounted) {
+          setCurrentView('home');
+          setLoading(false);
+        }
+      } catch (error) {
+        if (mounted) {
+          setCurrentView('home');
+          setLoading(false);
+        }
       }
 
     } catch (error) {
@@ -180,26 +207,18 @@ useEffect(() => {
     }
   };
 
-  // Reasonable timeout to prevent infinite loading
-  const timeoutId = setTimeout(() => {
-    if (mounted && loading) {
-      setLoading(false);
-      setCurrentView(user ? 'dashboard' : 'home');
-    }
-  }, 8000);
-
   initializeAuth();
 
   return () => {
     mounted = false;
-    clearTimeout(timeoutId);
+    if (timeoutId) clearTimeout(timeoutId);
     if (authSubscription?.subscription?.unsubscribe) {
       authSubscription.subscription.unsubscribe();
     }
   };
-}, []);
+}, []); // Empty dependency array is correct here
 
-// Reset user state on signout
+// Enhanced reset user state with cache clearing
 const resetUserState = () => {
   setUser(null);
   setUserProfile(null);
@@ -210,6 +229,29 @@ const resetUserState = () => {
   setCurrentView('home');
   setLoading(false);
   setAuthError('');
+  
+  // Clear any cached auth state
+  if (typeof window !== 'undefined') {
+    try {
+      // Clear common Supabase localStorage keys
+      const keysToRemove = [
+        'supabase.auth.token',
+        'sb-eukbotdgyqtcwrfwtwso-auth-token',
+        'supabase.auth.user',
+        'supabase.auth.session'
+      ];
+      
+      keysToRemove.forEach(key => {
+        try {
+          localStorage.removeItem(key);
+        } catch (e) {
+          // Ignore errors
+        }
+      });
+    } catch (e) {
+      // Ignore localStorage errors in incognito/private mode
+    }
+  }
 };
 
 // Handle new user setup
@@ -225,7 +267,7 @@ const handleNewUserSetup = async (user) => {
   }
 };
 
-// PRODUCTION USER DATA LOADING - Clean and robust
+// ULTRA-ROBUST USER DATA LOADING - Prevents hanging
 const loadUserData = async (userId) => {
   if (!userId) {
     setCurrentView('home');
@@ -235,18 +277,38 @@ const loadUserData = async (userId) => {
 
   setLoading(true);
 
+  // Maximum 8 seconds for entire data loading process
+  const loadingTimeout = setTimeout(() => {
+    setLoading(false);
+    setCurrentView('dashboard');
+    setAnalytics({
+      tasks_completed_today: 0,
+      tasks_pending: 0,
+      productivity_score: 8.2,
+      weekly_focus_time: 1240,
+      completion_rate: 0
+    });
+  }, 8000);
+
   try {
-    // Load user profile - critical for app flow
-    const profileResult = await getUserProfile(userId);
+    // Load user profile with aggressive timeout
+    const profileResult = await Promise.race([
+      getUserProfile(userId),
+      new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Profile timeout')), 3000)
+      )
+    ]);
     
     if (!profileResult.success) {
       await createUserProfile({ id: userId, email: user?.email || '' });
+      clearTimeout(loadingTimeout);
       setCurrentView('onboarding');
       setLoading(false);
       return;
     }
 
     if (!profileResult.data) {
+      clearTimeout(loadingTimeout);
       setCurrentView('onboarding');
       setLoading(false);
       return;
@@ -257,13 +319,14 @@ const loadUserData = async (userId) => {
 
     // Check if onboarding is complete
     if (!profileResult.data.onboarding_completed) {
+      clearTimeout(loadingTimeout);
       setCurrentView('onboarding');
       setLoading(false);
       return;
     }
 
-    // Load other data with timeouts - don't let failures block the UI
-    const loadWithTimeout = (promise, timeout = 5000) => {
+    // Load other data with shorter, individual timeouts
+    const loadWithTimeout = (promise, timeout = 2000) => {
       return Promise.race([
         promise,
         new Promise((_, reject) => 
@@ -278,9 +341,13 @@ const loadUserData = async (userId) => {
       loadWithTimeout(loadChatHistory(userId))
     ]);
 
-    // Process goals
+    // Process results - always succeeds even if some fail
+    const processedGoals = [];
+    const processedTasks = [];
+    const processedChat = [];
+
     if (goalsResult.status === 'fulfilled' && goalsResult.value.success) {
-      const formattedGoals = (goalsResult.value.data || []).map(goal => ({
+      processedGoals.push(...(goalsResult.value.data || []).map(goal => ({
         id: goal.id,
         title: goal.title,
         description: goal.description,
@@ -288,15 +355,11 @@ const loadUserData = async (userId) => {
         progress: goal.progress || 0,
         deadline: goal.target_date ? new Date(goal.target_date) : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
         status: goal.status || 'active'
-      }));
-      setGoals(formattedGoals);
-    } else {
-      setGoals([]);
+      })));
     }
 
-    // Process tasks
     if (tasksResult.status === 'fulfilled' && tasksResult.value.success) {
-      const formattedTasks = (tasksResult.value.data || []).map(task => ({
+      processedTasks.push(...(tasksResult.value.data || []).map(task => ({
         id: task.id,
         title: task.title,
         description: task.description || '',
@@ -306,47 +369,38 @@ const loadUserData = async (userId) => {
         estimated_duration: task.estimated_duration || 30,
         voice_input: task.voice_input || false,
         completed_at: task.completed_at ? new Date(task.completed_at) : null
-      }));
-      setTasks(formattedTasks);
-
-      // Calculate analytics
-      const completedToday = formattedTasks.filter(t => 
-        t.status === 'completed' && 
-        t.completed_at && 
-        t.completed_at.toDateString() === new Date().toDateString()
-      ).length;
-
-      setAnalytics({
-        tasks_completed_today: completedToday,
-        tasks_pending: formattedTasks.filter(t => t.status === 'pending').length,
-        productivity_score: 8.2,
-        weekly_focus_time: 1240,
-        completion_rate: formattedTasks.length > 0 ? (completedToday / formattedTasks.length) * 100 : 0
-      });
-    } else {
-      setTasks([]);
-      setAnalytics({
-        tasks_completed_today: 0,
-        tasks_pending: 0,
-        productivity_score: 8.2,
-        weekly_focus_time: 1240,
-        completion_rate: 0
-      });
+      })));
     }
 
-    // Process chat history
     if (chatResult.status === 'fulfilled' && chatResult.value.success) {
-      setChatMessages(chatResult.value.messages || []);
-    } else {
-      setChatMessages([]);
+      processedChat.push(...(chatResult.value.messages || []));
     }
 
+    // Set all data
+    setGoals(processedGoals);
+    setTasks(processedTasks);
+    setChatMessages(processedChat);
+
+    // Calculate analytics
+    const completedToday = processedTasks.filter(t => 
+      t.status === 'completed' && 
+      t.completed_at && 
+      t.completed_at.toDateString() === new Date().toDateString()
+    ).length;
+
+    setAnalytics({
+      tasks_completed_today: completedToday,
+      tasks_pending: processedTasks.filter(t => t.status === 'pending').length,
+      productivity_score: 8.2,
+      weekly_focus_time: 1240,
+      completion_rate: processedTasks.length > 0 ? (completedToday / processedTasks.length) * 100 : 0
+    });
+
+    clearTimeout(loadingTimeout);
     setCurrentView('dashboard');
 
   } catch (error) {
-    setAuthError('Some features may be limited due to connection issues.');
-    
-    // Still show dashboard even with errors
+    // Always show dashboard even with errors
     setAnalytics({
       tasks_completed_today: 0,
       tasks_pending: 0,
@@ -354,7 +408,13 @@ const loadUserData = async (userId) => {
       weekly_focus_time: 1240,
       completion_rate: 0
     });
+    
+    clearTimeout(loadingTimeout);
     setCurrentView('dashboard');
+    
+    if (error.message !== 'Timeout') {
+      setAuthError('Some features may be limited due to connection issues.');
+    }
   } finally {
     setLoading(false);
   }
@@ -394,11 +454,42 @@ const loadUserData = async (userId) => {
     }
   };
 
-  const handleSignOut = async () => {
+// Enhanced handle sign out with cache clearing
+const handleSignOut = async () => {
+  try {
     setLoading(true);
+    
+    // Clear all local state first
+    resetUserState();
+    
+    // Sign out from Supabase
     await signOut();
-    // State will be reset by auth listener
-  };
+    
+    // Force clear any cached auth state
+    if (typeof window !== 'undefined') {
+      // Clear localStorage if it exists (fail silently)
+      try {
+        localStorage.removeItem('supabase.auth.token');
+        localStorage.removeItem('sb-eukbotdgyqtcwrfwtwso-auth-token');
+      } catch (e) {
+        // Ignore localStorage errors
+      }
+      
+      // Clear sessionStorage if it exists (fail silently)  
+      try {
+        sessionStorage.clear();
+      } catch (e) {
+        // Ignore sessionStorage errors
+      }
+    }
+    
+  } catch (error) {
+    // Even if signout fails, reset the app state
+    resetUserState();
+  } finally {
+    setLoading(false);
+  }
+};
 
   // Voice Recording Functions
   const startRecording = async () => {
@@ -759,15 +850,36 @@ const loadUserData = async (userId) => {
     }
   };
 
-  // Professional loading state for production
+  // Professional loading state with user escape route
   if (loading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-indigo-900 via-purple-900 to-pink-900 flex items-center justify-center">
         <div className="text-center">
           <Target className="h-12 w-12 text-white mx-auto mb-4 animate-spin" />
           <div className="text-white text-xl mb-2">Loading F.I.A.</div>
-          <div className="text-white/60 text-sm">Setting up your productivity workspace...</div>
+          <div className="text-white/60 text-sm mb-8">Setting up your productivity workspace...</div>
+          
+          {/* Show continue button after 4 seconds */}
+          <div className="opacity-0" style={{ animation: 'fadeIn 0.5s ease-in 4s forwards' }}>
+            <p className="text-white/40 text-sm mb-4">Taking longer than expected?</p>
+            <button
+              onClick={() => {
+                setLoading(false);
+                setCurrentView(user ? 'dashboard' : 'home');
+              }}
+              className="bg-white/20 text-white px-6 py-2 rounded-lg hover:bg-white/30 transition-colors"
+            >
+              Continue to App
+            </button>
+          </div>
         </div>
+        
+        <style>{`
+          @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+          }
+        `}</style>
       </div>
     );
   }
@@ -789,6 +901,14 @@ const loadUserData = async (userId) => {
         {authError && (
           <div className="bg-red-50 border border-red-200 rounded-lg p-3 mb-4">
             <p className="text-red-700 text-sm">{authError}</p>
+            {authError.includes('connection') && (
+              <button
+                onClick={() => window.location.reload()}
+                className="mt-2 text-red-600 hover:text-red-800 underline text-sm"
+              >
+                Refresh page to try again
+              </button>
+            )}
           </div>
         )}
 
