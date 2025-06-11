@@ -7,6 +7,7 @@ import {
   onAuthChange, 
   getUserProfile, 
   updateUserProfile,
+  createUserProfile, // ADD THIS LINE
   saveChatMessage, 
   loadChatHistory, 
   getRecentMessages,
@@ -126,33 +127,44 @@ const FocusedInspiredActionApp = () => {
     }
   ];
 
-  // Initialize auth state
-  useEffect(() => {
-    const { data: authListener } = onAuthChange(async (event, session) => {
-      console.log('🔐 Auth state changed:', event, session?.user?.email);
-      setLoading(true);
+// Initialize auth state
+useEffect(() => {
+  const { data: authListener } = onAuthChange(async (event, session) => {
+    console.log('🔐 Auth state changed:', event, session?.user?.email);
+    setLoading(true);
+    
+    if (session?.user) {
+      setUser(session.user);
       
-      if (session?.user) {
-        setUser(session.user);
-        await loadUserData(session.user.id);
-      } else {
-        setUser(null);
-        setUserProfile(null);
-        setGoals([]);
-        setTasks([]);
-        setChatMessages([]);
-        setCurrentView('home');
+      // Handle profile creation for new signups
+      if (event === 'SIGNED_UP') {
+        console.log('👤 New user signup - creating profile');
+        const profileResult = await createUserProfile(session.user);
+        if (!profileResult.success) {
+          console.error('❌ Failed to create profile:', profileResult.error);
+        }
       }
       
-      setLoading(false);
-    });
+      // Load user data
+      await loadUserData(session.user.id);
+    } else {
+      setUser(null);
+      setUserProfile(null);
+      setGoals([]);
+      setTasks([]);
+      setChatMessages([]);
+      setCurrentView('home');
+    }
+    
+    setLoading(false);
+  });
 
-    return () => {
-      if (authListener?.subscription?.unsubscribe) {
-        authListener.subscription.unsubscribe();
-      }
-    };
-  }, []);
+  return () => {
+    if (authListener?.subscription?.unsubscribe) {
+      authListener.subscription.unsubscribe();
+    }
+  };
+}, []);
 
   // Auto-save data when it changes (Enhanced Persistence)
   useEffect(() => {
@@ -189,114 +201,131 @@ const FocusedInspiredActionApp = () => {
     }
   }, [goals, user]);
 
-  // Load user data from database with error handling
-  const loadUserData = async (userId) => {
-    try {
-      console.log('📊 Loading user data for:', userId);
+// Load user data from database with error handling
+const loadUserData = async (userId) => {
+  try {
+    console.log('📊 Loading user data for:', userId);
 
-      // Load user profile
-      const profileResult = await getUserProfile(userId);
-      if (profileResult.success && profileResult.data) {
-        setUserProfile(profileResult.data);
-        setOnboardingData(profileResult.data.onboarding_data || {});
-        
-        // If onboarding not completed, go to onboarding
-        if (!profileResult.data.onboarding_completed) {
-          console.log('🎯 User needs to complete onboarding');
-          setCurrentView('onboarding');
-          return;
-        }
+    // Load user profile with retry logic
+    let profileResult = await getUserProfile(userId);
+    
+    // If no profile exists, create one
+    if (!profileResult.success || !profileResult.data) {
+      console.log('👤 No profile found, creating one...');
+      const createResult = await createUserProfile({ 
+        id: userId, 
+        email: user?.email || 'unknown@example.com' 
+      });
+      if (createResult.success) {
+        profileResult = await getUserProfile(userId);
       } else {
-        console.log('👤 No existing profile found, will need onboarding');
+        console.error('❌ Failed to create profile:', createResult.error);
         setCurrentView('onboarding');
         return;
       }
-
-      // Load goals from database
-      const goalsResult = await loadGoals(userId);
-      if (goalsResult.success && goalsResult.data) {
-        const formattedGoals = goalsResult.data.map(goal => ({
-          id: goal.id,
-          title: goal.title,
-          description: goal.description,
-          priority: goal.priority,
-          progress: goal.progress || 0,
-          deadline: goal.target_date ? new Date(goal.target_date) : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
-          status: goal.status || 'active'
-        }));
-        setGoals(formattedGoals);
-        console.log('🎯 Loaded goals:', formattedGoals.length);
-      } else {
-        setGoals([]);
-        console.log('🎯 No goals found or error loading goals');
-      }
-
-      // Load tasks from database
-      const tasksResult = await loadTasks(userId);
-      if (tasksResult.success && tasksResult.data) {
-        const formattedTasks = tasksResult.data.map(task => ({
-          id: task.id,
-          title: task.title,
-          description: task.description || '',
-          priority: task.priority || 'medium',
-          status: task.status || 'pending',
-          due_date: task.due_date ? new Date(task.due_date) : null,
-          estimated_duration: task.estimated_duration || 30,
-          voice_input: task.voice_input || false,
-          completed_at: task.completed_at ? new Date(task.completed_at) : null
-        }));
-        setTasks(formattedTasks);
-        console.log('📋 Loaded tasks:', formattedTasks.length);
-      } else {
-        setTasks([]);
-        console.log('📋 No tasks found or error loading tasks');
-      }
-
-      // Load chat history from database
-      const chatResult = await loadChatHistory(userId);
-      if (chatResult.success && chatResult.messages) {
-        setChatMessages(chatResult.messages);
-        console.log('💬 Loaded chat messages:', chatResult.messages.length);
-      } else {
-        setChatMessages([]);
-        console.log('💬 No chat history found or error loading chat');
-      }
-
-      // Calculate analytics from loaded data
-      const formattedTasks = tasksResult.success && tasksResult.data ? 
-        tasksResult.data.map(task => ({
-          id: task.id,
-          status: task.status || 'pending',
-          completed_at: task.completed_at ? new Date(task.completed_at) : null
-        })) : [];
-
-      const completedToday = formattedTasks.filter(t => 
-        t.status === 'completed' && 
-        t.completed_at && 
-        t.completed_at.toDateString() === new Date().toDateString()
-      ).length;
-
-      const pendingTasks = formattedTasks.filter(t => t.status === 'pending').length;
-
-      setAnalytics({
-        tasks_completed_today: completedToday,
-        tasks_pending: pendingTasks,
-        productivity_score: 8.2,
-        weekly_focus_time: 1240,
-        completion_rate: formattedTasks.length > 0 ? (completedToday / formattedTasks.length) * 100 : 0
-      });
-
-      setCurrentView('dashboard');
-      console.log('✅ User data loaded successfully');
-    } catch (error) {
-      console.error('❌ Error loading user data:', error);
-      // Set defaults on error
-      setGoals([]);
-      setTasks([]);
-      setChatMessages([]);
-      setCurrentView('dashboard');
     }
-  };
+
+    if (profileResult.success && profileResult.data) {
+      setUserProfile(profileResult.data);
+      setOnboardingData(profileResult.data.onboarding_data || {});
+      
+      // If onboarding not completed, go to onboarding
+      if (!profileResult.data.onboarding_completed) {
+        console.log('🎯 User needs to complete onboarding');
+        setCurrentView('onboarding');
+        return;
+      }
+    } else {
+      console.log('👤 Still no profile, going to onboarding');
+      setCurrentView('onboarding');
+      return;
+    }
+
+    // Load goals from database
+    const goalsResult = await loadGoals(userId);
+    if (goalsResult.success && goalsResult.data) {
+      const formattedGoals = goalsResult.data.map(goal => ({
+        id: goal.id,
+        title: goal.title,
+        description: goal.description,
+        priority: goal.priority,
+        progress: goal.progress || 0,
+        deadline: goal.target_date ? new Date(goal.target_date) : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+        status: goal.status || 'active'
+      }));
+      setGoals(formattedGoals);
+      console.log('🎯 Loaded goals:', formattedGoals.length);
+    } else {
+      setGoals([]);
+      console.log('🎯 No goals found or error loading goals');
+    }
+
+    // Load tasks from database
+    const tasksResult = await loadTasks(userId);
+    if (tasksResult.success && tasksResult.data) {
+      const formattedTasks = tasksResult.data.map(task => ({
+        id: task.id,
+        title: task.title,
+        description: task.description || '',
+        priority: task.priority || 'medium',
+        status: task.status || 'pending',
+        due_date: task.due_date ? new Date(task.due_date) : null,
+        estimated_duration: task.estimated_duration || 30,
+        voice_input: task.voice_input || false,
+        completed_at: task.completed_at ? new Date(task.completed_at) : null
+      }));
+      setTasks(formattedTasks);
+      console.log('📋 Loaded tasks:', formattedTasks.length);
+    } else {
+      setTasks([]);
+      console.log('📋 No tasks found or error loading tasks');
+    }
+
+    // Load chat history from database
+    const chatResult = await loadChatHistory(userId);
+    if (chatResult.success && chatResult.messages) {
+      setChatMessages(chatResult.messages);
+      console.log('💬 Loaded chat messages:', chatResult.messages.length);
+    } else {
+      setChatMessages([]);
+      console.log('💬 No chat history found or error loading chat');
+    }
+
+    // Calculate analytics from loaded data
+    const formattedTasks = tasksResult.success && tasksResult.data ? 
+      tasksResult.data.map(task => ({
+        id: task.id,
+        status: task.status || 'pending',
+        completed_at: task.completed_at ? new Date(task.completed_at) : null
+      })) : [];
+
+    const completedToday = formattedTasks.filter(t => 
+      t.status === 'completed' && 
+      t.completed_at && 
+      t.completed_at.toDateString() === new Date().toDateString()
+    ).length;
+
+    const pendingTasks = formattedTasks.filter(t => t.status === 'pending').length;
+
+    setAnalytics({
+      tasks_completed_today: completedToday,
+      tasks_pending: pendingTasks,
+      productivity_score: 8.2,
+      weekly_focus_time: 1240,
+      completion_rate: formattedTasks.length > 0 ? (completedToday / formattedTasks.length) * 100 : 0
+    });
+
+    setCurrentView('dashboard');
+    console.log('✅ User data loaded successfully');
+  } catch (error) {
+    console.error('❌ Error loading user data:', error);
+    // Set defaults on error
+    setGoals([]);
+    setTasks([]);
+    setChatMessages([]);
+    setCurrentView('dashboard');
+  }
+};
 
   // Authentication Functions
   const handleAuth = async () => {
