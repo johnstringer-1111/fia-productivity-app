@@ -306,139 +306,139 @@ const FocusedInspiredActionApp = () => {
     }
   };
 
-// REPLACE your entire sendMessage function with this:
-const sendMessage = async () => {
-  if (!newMessage.trim()) return;
+  // AI Chat Function
+  const sendMessage = async () => {
+    if (!newMessage.trim()) return;
 
-  const userMessage = { role: 'user', content: newMessage, timestamp: new Date() };
-  setChatMessages(prev => [...prev, userMessage]);
-  const messageToSend = newMessage; // Store before clearing
-  setNewMessage(''); // Clear the input
-  setLoading(true);
+    const userMessage = { role: 'user', content: newMessage, timestamp: new Date() };
+    setChatMessages(prev => [...prev, userMessage]);
+    const messageToSend = newMessage; // Store before clearing
+    setNewMessage(''); // Clear the input
+    setLoading(true);
 
-  try {
-    // 🚀 REAL AI CALL to your API route
-    const response = await fetch('/api/ai-coach', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        message: messageToSend,
-        userGoals: goals,
-        userTasks: tasks
-      })
-    });
+    try {
+      // 🚀 REAL AI CALL to your API route
+      const response = await fetch('/api/ai-coach', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          message: messageToSend,
+          userGoals: goals,
+          userTasks: tasks
+        })
+      });
 
-    const data = await response.json();
-    const aiResponse = data.success ? data.response : "Let's focus on your most important task right now! 🎯";
+      const data = await response.json();
+      const aiResponse = data.success ? data.response : "Let's focus on your most important task right now! 🎯";
 
-    const aiMessage = { 
-      role: 'assistant', 
-      content: aiResponse, 
-      timestamp: new Date() 
-    };
-    setChatMessages(prev => [...prev, aiMessage]);
+      const aiMessage = { 
+        role: 'assistant', 
+        content: aiResponse, 
+        timestamp: new Date() 
+      };
+      setChatMessages(prev => [...prev, aiMessage]);
 
-  } catch (error) {
-    console.error('Error:', error);
-    
-    // Fallback message
-    const fallbackMessage = {
-      role: 'assistant',
-      content: "I'm here to help you stay productive! What's your most important task right now? 💪",
-      timestamp: new Date()
-    };
-    setChatMessages(prev => [...prev, fallbackMessage]);
-  } finally {
-    setLoading(false);
-  }
-};
+    } catch (error) {
+      console.error('Error:', error);
+      
+      // Fallback message
+      const fallbackMessage = {
+        role: 'assistant',
+        content: "I'm here to help you stay productive! What's your most important task right now? 💪",
+        timestamp: new Date()
+      };
+      setChatMessages(prev => [...prev, fallbackMessage]);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   // Onboarding Functions
-const handleOnboardingAnswer = async (answer) => {
-  const currentQuestion = onboardingQuestions[onboardingStep];
-  const updatedData = {
-    ...onboardingData,
-    [currentQuestion.id]: answer
+  const handleOnboardingAnswer = async (answer) => {
+    const currentQuestion = onboardingQuestions[onboardingStep];
+    const updatedData = {
+      ...onboardingData,
+      [currentQuestion.id]: answer
+    };
+    setOnboardingData(updatedData);
+    
+    if (onboardingStep < onboardingQuestions.length - 1) {
+      setOnboardingStep(prev => prev + 1);
+    } else {
+      await completeOnboarding(updatedData);
+    }
   };
-  setOnboardingData(updatedData);
-  
-  if (onboardingStep < onboardingQuestions.length - 1) {
-    setOnboardingStep(prev => prev + 1);
-  } else {
-    await completeOnboarding(updatedData);
-  }
-};
 
-const completeOnboarding = async (data) => {
-  try {
-    await generateInitialCoachingPlan(data);
-    setCurrentView('dashboard');
-  } catch (error) {
-    console.error('Error completing onboarding:', error);
-  }
-};
+  const completeOnboarding = async (data) => {
+    try {
+      await generateInitialCoachingPlan(data);
+      setCurrentView('dashboard');
+    } catch (error) {
+      console.error('Error completing onboarding:', error);
+    }
+  };
 
-const generateInitialCoachingPlan = async (data) => {
-  try {
-    const initialGoals = [
-      {
-        id: 1,
-        user_id: user.id,
-        title: "Morning Routine Optimization",
-        description: `Tailored for your ${data.schedule || 'preferred work time'}`,
-        deadline: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-        priority: 'high',
-        progress: 0,
-        status: 'active'
-      },
-      {
-        id: 2,
-        user_id: user.id,
-        title: "Focused Work Implementation",
-        description: `${data.workStyle || 'Your preferred work style'} approach`,
-        deadline: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
-        priority: 'high',
-        progress: 0,
-        status: 'active'
-      }
-    ];
+  const generateInitialCoachingPlan = async (data) => {
+    try {
+      const initialGoals = [
+        {
+          id: 1,
+          user_id: user.id,
+          title: "Morning Routine Optimization",
+          description: `Tailored for your ${data.schedule || 'preferred work time'}`,
+          deadline: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+          priority: 'high',
+          progress: 0,
+          status: 'active'
+        },
+        {
+          id: 2,
+          user_id: user.id,
+          title: "Focused Work Implementation",
+          description: `${data.workStyle || 'Your preferred work style'} approach`,
+          deadline: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
+          priority: 'high',
+          progress: 0,
+          status: 'active'
+        }
+      ];
 
-    setGoals(initialGoals);
+      setGoals(initialGoals);
 
-    const initialTasks = [
-      {
-        id: 1,
-        user_id: user.id,
-        goal_id: 1,
-        title: "Design your ideal morning routine",
-        description: "Create a structured start to your day",
-        status: 'pending',
-        priority: 'high',
-        due_date: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000),
-        estimated_duration: 45,
-        voice_input: false
-      },
-      {
-        id: 2,
-        user_id: user.id,
-        goal_id: 2,
-        title: "Block calendar for deep work",
-        description: "Schedule uninterrupted focus time",
-        status: 'pending',
-        priority: 'medium',
-        due_date: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000),
-        estimated_duration: 30,
-        voice_input: false
-      }
-    ];
+      const initialTasks = [
+        {
+          id: 1,
+          user_id: user.id,
+          goal_id: 1,
+          title: "Design your ideal morning routine",
+          description: "Create a structured start to your day",
+          status: 'pending',
+          priority: 'high',
+          due_date: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000),
+          estimated_duration: 45,
+          voice_input: false
+        },
+        {
+          id: 2,
+          user_id: user.id,
+          goal_id: 2,
+          title: "Block calendar for deep work",
+          description: "Schedule uninterrupted focus time",
+          status: 'pending',
+          priority: 'medium',
+          due_date: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000),
+          estimated_duration: 30,
+          voice_input: false
+        }
+      ];
 
-    setTasks(initialTasks);
-  } catch (error) {
-    console.error('Error generating coaching plan:', error);
-  }
-};
+      setTasks(initialTasks);
+    } catch (error) {
+      console.error('Error generating coaching plan:', error);
+    }
+  };
 
   // Subscription Functions
   const handleSubscription = async () => {
