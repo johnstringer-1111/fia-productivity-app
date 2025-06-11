@@ -380,7 +380,9 @@ const loadUserData = async (userId) => {
         due_date: task.due_date ? new Date(task.due_date) : null,
         estimated_duration: task.estimated_duration || 30,
         voice_input: task.voice_input || false,
-        completed_at: task.completed_at ? new Date(task.completed_at) : null
+        completed_at: task.completed_at ? new Date(task.completed_at) : null,
+        simpleology_id: task.simpleology_id || null,
+        imported_from_simpleology: task.imported_from_simpleology || false
       })));
     }
 
@@ -579,6 +581,157 @@ const handleSignOut = async () => {
       setAudioChunks([]);
     }
   }, [audioChunks, isRecording]);
+
+  // Simpleology Integration Functions
+  const connectSimpleology = async (apiKey) => {
+    if (!apiKey.trim()) {
+      alert('Please enter your Simpleology API key');
+      return;
+    }
+
+    try {
+      setSyncingSimpleology(true);
+      
+      // Test API connection with actual Simpleology endpoint
+      const response = await fetch('https://my.simpleology.com/api/v1/daily-targets?page=1', {
+        headers: {
+          'Authorization': `Basic ${btoa(apiKey + ':')}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (response.ok) {
+        setSimpleologyApiKey(apiKey);
+        setSimpleologyConnected(true);
+        
+        // Save API key to user profile
+        await updateUserProfile(user.id, {
+          simpleology_api_key: apiKey,
+          simpleology_connected: true
+        });
+
+        alert('✅ Simpleology connected successfully!');
+        setShowSimpleologySettings(false);
+      } else {
+        throw new Error('Invalid API key or connection failed');
+      }
+    } catch (error) {
+      alert('❌ Failed to connect to Simpleology. Please check your API key and try again.');
+    } finally {
+      setSyncingSimpleology(false);
+    }
+  };
+
+  const importSimpleologyTargets = async () => {
+    if (!simpleologyConnected || !simpleologyApiKey) {
+      alert('Please connect to Simpleology first');
+      return;
+    }
+
+    try {
+      setSyncingSimpleology(true);
+      
+      // Fetch daily targets from Simpleology
+      const response = await fetch('https://my.simpleology.com/api/v1/daily-targets', {
+        headers: {
+          'Authorization': `Basic ${btoa(simpleologyApiKey + ':')}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch daily targets');
+      }
+
+      const data = await response.json();
+      
+      // Transform Simpleology targets to F.I.A. tasks
+      const importedTasks = data?.map(target => ({
+        title: target.name || target.title || target.task || 'Imported Task',
+        description: `Imported from Simpleology: ${target.description || target.notes || ''}`,
+        priority: 'medium',
+        status: target.completed || target.done ? 'completed' : 'pending',
+        estimated_duration: target.estimated_time || target.duration || 30,
+        voice_input: false,
+        simpleology_id: target.id, // Store Simpleology ID for sync
+        imported_from_simpleology: true
+      })) || [];
+
+      if (importedTasks.length === 0) {
+        alert('No daily targets found in Simpleology for today.');
+        return;
+      }
+
+      // Save imported tasks to database
+      const results = await Promise.all(
+        importedTasks.map(task => saveTask(user.id, task))
+      );
+
+      const successfulImports = results.filter(r => r.success);
+      
+      // Add to local state
+      const newTasks = successfulImports.map(result => ({
+        id: result.data.id,
+        title: result.data.title,
+        description: result.data.description,
+        priority: result.data.priority,
+        status: result.data.status,
+        due_date: result.data.due_date ? new Date(result.data.due_date) : null,
+        estimated_duration: result.data.estimated_duration,
+        voice_input: result.data.voice_input,
+        simpleology_id: result.data.simpleology_id,
+        imported_from_simpleology: true,
+        completed_at: result.data.status === 'completed' ? new Date() : null
+      }));
+
+      setTasks(prev => [...newTasks, ...prev]);
+      
+      alert(`✅ Imported ${successfulImports.length} tasks from Simpleology!`);
+      
+    } catch (error) {
+      alert('❌ Failed to import Simpleology targets. Please try again.');
+    } finally {
+      setSyncingSimpleology(false);
+    }
+  };
+
+  const syncTaskToSimpleology = async (taskId, completed) => {
+    const task = tasks.find(t => t.id === taskId);
+    
+    if (!task?.simpleology_id || !simpleologyConnected) {
+      return; // Only sync tasks that came from Simpleology
+    }
+
+    try {
+      // For now, we'll skip the update since the endpoint isn't documented
+      // This will be read-only import until we find the update endpoint
+      console.log(`Would sync task ${task.title} to Simpleology as ${completed ? 'completed' : 'pending'}`);
+      
+      // TODO: Implement when update endpoint is found
+      // Likely: PUT /api/v1/daily-targets/${task.simpleology_id}
+      
+    } catch (error) {
+      console.error('❌ Failed to sync task with Simpleology:', error);
+      // Don't show alert for sync failures - just log them
+    }
+  };
+
+  const disconnectSimpleology = async () => {
+    try {
+      setSimpleologyConnected(false);
+      setSimpleologyApiKey('');
+      
+      // Remove from user profile
+      await updateUserProfile(user.id, {
+        simpleology_api_key: null,
+        simpleology_connected: false
+      });
+
+      alert('Simpleology disconnected');
+    } catch (error) {
+      alert('Failed to disconnect Simpleology');
+    }
+  };
 
   // Task Management Functions
   const createTask = async () => {
@@ -845,169 +998,6 @@ const handleSignOut = async () => {
     }
   };
 
-  const connectSimpleology = async (apiKey) => {
-    if (!apiKey.trim()) {
-      alert('Please enter your Simpleology API key');
-      return;
-    }
-
-    try {
-      setSyncingSimpleology(true);
-      
-      // Test API connection with actual Simpleology endpoint
-      const response = await fetch('https://my.simpleology.com/api/v1/daily-targets?page=1', {
-        headers: {
-          'Authorization': `Basic ${btoa(apiKey + ':')}`,
-          'Content-Type': 'application/json'
-        }
-      });
-
-      if (response.ok) {
-        setSimpleologyApiKey(apiKey);
-        setSimpleologyConnected(true);
-        
-        // Save API key to user profile
-        await updateUserProfile(user.id, {
-          simpleology_api_key: apiKey,
-          simpleology_connected: true
-        });
-
-        alert('✅ Simpleology connected successfully!');
-        setShowSimpleologySettings(false);
-      } else {
-        throw new Error('Invalid API key or connection failed');
-      }
-    } catch (error) {
-      alert('❌ Failed to connect to Simpleology. Please check your API key and try again.');
-    } finally {
-      setSyncingSimpleology(false);
-    }
-  };
-
-  const importSimpleologyTargets = async () => {
-    if (!simpleologyConnected || !simpleologyApiKey) {
-      alert('Please connect to Simpleology first');
-      return;
-    }
-
-    try {
-      setSyncingSimpleology(true);
-      
-      // Fetch daily targets from Simpleology
-      const response = await fetch('https://my.simpleology.com/api/v1/daily-targets', {
-        headers: {
-          'Authorization': `Basic ${btoa(simpleologyApiKey + ':')}`,
-          'Content-Type': 'application/json'
-        }
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to fetch daily targets');
-      }
-
-      const data = await response.json();
-      
-      // Transform Simpleology targets to F.I.A. tasks
-      const importedTasks = data?.map(target => ({
-        title: target.name || target.title || target.task || 'Imported Task',
-        description: `Imported from Simpleology: ${target.description || target.notes || ''}`,
-        priority: 'medium',
-        status: target.completed || target.done ? 'completed' : 'pending',
-        estimated_duration: target.estimated_time || target.duration || 30,
-        voice_input: false,
-        simpleology_id: target.id, // Store Simpleology ID for sync
-        imported_from_simpleology: true
-      })) || [];
-
-      if (importedTasks.length === 0) {
-        alert('No daily targets found in Simpleology for today.');
-        return;
-      }
-
-      // Save imported tasks to database
-      const results = await Promise.all(
-        importedTasks.map(task => saveTask(user.id, task))
-      );
-
-      const successfulImports = results.filter(r => r.success);
-      
-      // Add to local state
-      const newTasks = successfulImports.map(result => ({
-        id: result.data.id,
-        title: result.data.title,
-        description: result.data.description,
-        priority: result.data.priority,
-        status: result.data.status,
-        due_date: result.data.due_date ? new Date(result.data.due_date) : null,
-        estimated_duration: result.data.estimated_duration,
-        voice_input: result.data.voice_input,
-        simpleology_id: result.data.simpleology_id,
-        imported_from_simpleology: true,
-        completed_at: result.data.status === 'completed' ? new Date() : null
-      }));
-
-      setTasks(prev => [...newTasks, ...prev]);
-      
-      alert(`✅ Imported ${successfulImports.length} tasks from Simpleology!`);
-      
-    } catch (error) {
-      alert('❌ Failed to import Simpleology targets. Please try again.');
-    } finally {
-      setSyncingSimpleology(false);
-    }
-  };
-
-  const syncTaskToSimpleology = async (taskId, completed) => {
-    const task = tasks.find(t => t.id === taskId);
-    
-    if (!task?.simpleology_id || !simpleologyConnected) {
-      return; // Only sync tasks that came from Simpleology
-    }
-
-    try {
-      // For now, we'll skip the update since the endpoint isn't documented
-      // This will be read-only import until we find the update endpoint
-      console.log(`Would sync task ${task.title} to Simpleology as ${completed ? 'completed' : 'pending'}`);
-      
-      // TODO: Implement when update endpoint is found
-      // Likely: PUT /api/v1/daily-targets/${task.simpleology_id}
-      
-    } catch (error) {
-      console.error('❌ Failed to sync task with Simpleology:', error);
-      // Don't show alert for sync failures - just log them
-    }
-  };
-
-  const disconnectSimpleology = async () => {
-    try {
-      setSimpleologyConnected(false);
-      setSimpleologyApiKey('');
-      
-      // Remove from user profile
-      await updateUserProfile(user.id, {
-        simpleology_api_key: null,
-        simpleology_connected: false
-      });
-
-      alert('Simpleology disconnected');
-    } catch (error) {
-      alert('Failed to disconnect Simpleology');
-    }
-  };
-  };
-
-  const disconnectSimpleology = async () => {
-    try {
-      setSimpleologyConnected(false);
-      setSimpleologyApiKey('');
-      
-      // Remove from user profile
-      await updateUserProfile(user.id, {
-        simpleology_api_key: null,
-        simpleology_connected: false
-      });
-
-      alert('Simpleology disconnected');
   // Utility Functions
   const getFilteredTasks = () => {
     return tasks.filter(task => {
@@ -1016,16 +1006,6 @@ const handleSignOut = async () => {
       if (activeTab === 'completed') return task.status === 'completed';
       return true;
     });
-  };
-
-  const getPriorityColor = (priority) => {
-    switch (priority) {
-      case 'urgent': return 'bg-red-100 text-red-800';
-      case 'high': return 'bg-orange-100 text-orange-800';
-      case 'medium': return 'bg-yellow-100 text-yellow-800';
-      case 'low': return 'bg-green-100 text-green-800';
-      default: return 'bg-gray-100 text-gray-800';
-    }
   };
 
   const getPriorityColor = (priority) => {
@@ -1399,6 +1379,8 @@ const handleSignOut = async () => {
       </div>
     </div>
   );
+
+  const renderSubscriptionModal = () => (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
       <div className="bg-white rounded-2xl shadow-2xl p-8 max-w-md w-full">
         <div className="text-center">
