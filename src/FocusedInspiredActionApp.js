@@ -133,20 +133,35 @@ useEffect(() => {
     console.log('🔐 Auth state changed:', event, session?.user?.email);
     setLoading(true);
     
+    // Auto-timeout after 5 seconds
+    setTimeout(() => {
+      if (loading) {
+        console.log('⏰ Loading timeout - forcing dashboard');
+        setLoading(false);
+        setCurrentView('dashboard');
+      }
+    }, 5000);
+    
     if (session?.user) {
       setUser(session.user);
       
       // Handle profile creation for new signups
       if (event === 'SIGNED_UP') {
         console.log('👤 New user signup - creating profile');
-        const profileResult = await createUserProfile(session.user);
-        if (!profileResult.success) {
-          console.error('❌ Failed to create profile:', profileResult.error);
+        try {
+          await createUserProfile(session.user);
+        } catch (error) {
+          console.error('❌ Profile creation failed:', error);
         }
       }
       
-      // Load user data
-      await loadUserData(session.user.id);
+      // Try to load user data (but don't let it hang)
+      try {
+        await loadUserData(session.user.id);
+      } catch (error) {
+        console.error('❌ Load user data failed:', error);
+        setCurrentView('dashboard');
+      }
     } else {
       setUser(null);
       setUserProfile(null);
@@ -800,12 +815,23 @@ const loadUserData = async (userId) => {
 
   // Loading state
   if (loading) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-indigo-900 via-purple-900 to-pink-900 flex items-center justify-center">
-        <div className="text-white text-xl">Loading F.I.A....</div>
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-indigo-900 via-purple-900 to-pink-900 flex items-center justify-center">
+      <div className="text-center">
+        <div className="text-white text-xl mb-4">Loading F.I.A....</div>
+        <button
+          onClick={() => {
+            setLoading(false);
+            setCurrentView('dashboard');
+          }}
+          className="bg-white text-indigo-900 px-6 py-2 rounded-lg hover:bg-gray-100"
+        >
+          Continue to App
+        </button>
       </div>
-    );
-  }
+    </div>
+  );
+}
 
   // Render Functions
   const renderAuth = () => (
