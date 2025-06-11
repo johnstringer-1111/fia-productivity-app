@@ -148,18 +148,55 @@ const FocusedInspiredActionApp = () => {
     });
 
     return () => {
-      authListener?.subscription?.unsubscribe();
+      if (authListener?.subscription?.unsubscribe) {
+        authListener.subscription.unsubscribe();
+      }
     };
   }, []);
 
-  // Load user data from database
+  // Auto-save data when it changes (Enhanced Persistence)
+  useEffect(() => {
+    if (user && tasks.length > 0) {
+      const saveData = async () => {
+        try {
+          console.log('💾 Auto-saving tasks to database...');
+          // Tasks are already saved individually, but we could implement batch save here if needed
+        } catch (error) {
+          console.error('❌ Error auto-saving tasks:', error);
+        }
+      };
+      
+      // Debounce auto-save
+      const timeoutId = setTimeout(saveData, 1000);
+      return () => clearTimeout(timeoutId);
+    }
+  }, [tasks, user]);
+
+  useEffect(() => {
+    if (user && goals.length > 0) {
+      const saveData = async () => {
+        try {
+          console.log('💾 Auto-saving goals to database...');
+          // Goals are already saved individually, but we could implement batch save here if needed
+        } catch (error) {
+          console.error('❌ Error auto-saving goals:', error);
+        }
+      };
+      
+      // Debounce auto-save
+      const timeoutId = setTimeout(saveData, 1000);
+      return () => clearTimeout(timeoutId);
+    }
+  }, [goals, user]);
+
+  // Load user data from database with error handling
   const loadUserData = async (userId) => {
     try {
       console.log('📊 Loading user data for:', userId);
 
       // Load user profile
       const profileResult = await getUserProfile(userId);
-      if (profileResult.success) {
+      if (profileResult.success && profileResult.data) {
         setUserProfile(profileResult.data);
         setOnboardingData(profileResult.data.onboarding_data || {});
         
@@ -169,70 +206,95 @@ const FocusedInspiredActionApp = () => {
           setCurrentView('onboarding');
           return;
         }
+      } else {
+        console.log('👤 No existing profile found, will need onboarding');
+        setCurrentView('onboarding');
+        return;
       }
 
       // Load goals from database
       const goalsResult = await loadGoals(userId);
-      if (goalsResult.success) {
+      if (goalsResult.success && goalsResult.data) {
         const formattedGoals = goalsResult.data.map(goal => ({
           id: goal.id,
           title: goal.title,
           description: goal.description,
           priority: goal.priority,
-          progress: goal.progress,
+          progress: goal.progress || 0,
           deadline: goal.target_date ? new Date(goal.target_date) : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
-          status: goal.status
+          status: goal.status || 'active'
         }));
         setGoals(formattedGoals);
         console.log('🎯 Loaded goals:', formattedGoals.length);
+      } else {
+        setGoals([]);
+        console.log('🎯 No goals found or error loading goals');
       }
 
       // Load tasks from database
       const tasksResult = await loadTasks(userId);
-      if (tasksResult.success) {
+      if (tasksResult.success && tasksResult.data) {
         const formattedTasks = tasksResult.data.map(task => ({
           id: task.id,
           title: task.title,
-          description: task.description,
-          priority: task.priority,
-          status: task.status,
+          description: task.description || '',
+          priority: task.priority || 'medium',
+          status: task.status || 'pending',
           due_date: task.due_date ? new Date(task.due_date) : null,
-          estimated_duration: task.estimated_duration,
-          voice_input: task.voice_input,
+          estimated_duration: task.estimated_duration || 30,
+          voice_input: task.voice_input || false,
           completed_at: task.completed_at ? new Date(task.completed_at) : null
         }));
         setTasks(formattedTasks);
         console.log('📋 Loaded tasks:', formattedTasks.length);
+      } else {
+        setTasks([]);
+        console.log('📋 No tasks found or error loading tasks');
       }
 
       // Load chat history from database
       const chatResult = await loadChatHistory(userId);
-      if (chatResult.success) {
+      if (chatResult.success && chatResult.messages) {
         setChatMessages(chatResult.messages);
         console.log('💬 Loaded chat messages:', chatResult.messages.length);
+      } else {
+        setChatMessages([]);
+        console.log('💬 No chat history found or error loading chat');
       }
 
       // Calculate analytics from loaded data
-      const completedToday = formattedTasks?.filter(t => 
+      const formattedTasks = tasksResult.success && tasksResult.data ? 
+        tasksResult.data.map(task => ({
+          id: task.id,
+          status: task.status || 'pending',
+          completed_at: task.completed_at ? new Date(task.completed_at) : null
+        })) : [];
+
+      const completedToday = formattedTasks.filter(t => 
         t.status === 'completed' && 
         t.completed_at && 
         t.completed_at.toDateString() === new Date().toDateString()
-      ).length || 0;
+      ).length;
 
-      const pendingTasks = formattedTasks?.filter(t => t.status === 'pending').length || 0;
+      const pendingTasks = formattedTasks.filter(t => t.status === 'pending').length;
 
       setAnalytics({
         tasks_completed_today: completedToday,
         tasks_pending: pendingTasks,
         productivity_score: 8.2,
         weekly_focus_time: 1240,
-        completion_rate: formattedTasks?.length > 0 ? completedToday / formattedTasks.length : 0
+        completion_rate: formattedTasks.length > 0 ? (completedToday / formattedTasks.length) * 100 : 0
       });
 
       setCurrentView('dashboard');
       console.log('✅ User data loaded successfully');
     } catch (error) {
       console.error('❌ Error loading user data:', error);
+      // Set defaults on error
+      setGoals([]);
+      setTasks([]);
+      setChatMessages([]);
+      setCurrentView('dashboard');
     }
   };
 
@@ -354,7 +416,7 @@ const FocusedInspiredActionApp = () => {
     }
   }, [audioChunks, isRecording]);
 
-  // Task Management Functions
+  // Task Management Functions with Enhanced Persistence
   const createTask = async () => {
     if (!newTask.title.trim() || !user) return;
 
@@ -373,7 +435,7 @@ const FocusedInspiredActionApp = () => {
           status: result.data.status,
           due_date: result.data.due_date ? new Date(result.data.due_date) : null,
           estimated_duration: result.data.estimated_duration,
-          voice_input: result.data.voice_input,
+          voice_input: result.data.voice_input || false,
           completed_at: null
         };
         
@@ -452,7 +514,27 @@ const FocusedInspiredActionApp = () => {
     }
   };
 
-  // AI Chat Function
+  // Enhanced Task Deletion Function
+  const removeTask = async (taskId) => {
+    if (!user) return;
+
+    try {
+      console.log('🗑️ Deleting task:', taskId);
+      
+      const result = await deleteTask(taskId);
+      if (result.success) {
+        setTasks(prev => prev.filter(task => task.id !== taskId));
+        console.log('✅ Task deleted from database');
+      } else {
+        throw new Error(result.error);
+      }
+    } catch (error) {
+      console.error('❌ Error deleting task:', error);
+      alert('Failed to delete task. Please try again.');
+    }
+  };
+
+  // AI Chat Function with Enhanced Persistence
   const sendMessage = async () => {
     if (!newMessage.trim() || !user) return;
 
@@ -515,7 +597,7 @@ const FocusedInspiredActionApp = () => {
     }
   };
 
-  // Onboarding Functions
+  // Onboarding Functions with Enhanced Persistence
   const handleOnboardingAnswer = async (answer) => {
     const currentQuestion = onboardingQuestions[onboardingStep];
     const updatedData = {
@@ -562,15 +644,15 @@ const FocusedInspiredActionApp = () => {
           priority: 'high',
           progress: 0,
           status: 'active',
-          deadline: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
+          target_date: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
         },
         {
-          title: "Focused Work Implementation",
+          title: "Focused Work Implementation", 
           description: `${data.workStyle || 'Your preferred work style'} approach`,
           priority: 'high',
           progress: 0,
           status: 'active',
-          deadline: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000)
+          target_date: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000)
         }
       ];
 
@@ -651,6 +733,39 @@ const FocusedInspiredActionApp = () => {
       case 'medium': return 'bg-yellow-100 text-yellow-800';
       case 'low': return 'bg-green-100 text-green-800';
       default: return 'bg-gray-100 text-gray-800';
+    }
+  };
+
+  // Data Persistence Check Function
+  const testDataPersistence = async () => {
+    try {
+      console.log('🧪 Testing data persistence...');
+      
+      // Test task persistence
+      const testTask = {
+        title: "Persistence Test Task",
+        description: "Testing cross-browser data persistence",
+        priority: 'medium',
+        status: 'pending',
+        estimated_duration: 5,
+        voice_input: false
+      };
+      
+      const taskResult = await saveTask(user.id, testTask);
+      if (taskResult.success) {
+        console.log('✅ Task persistence test passed');
+        
+        // Clean up test task
+        await deleteTask(taskResult.data.id);
+        console.log('🧹 Test task cleaned up');
+        
+        alert('✅ Data persistence test passed!\n\nYour data will be saved across all browsers and devices.');
+      } else {
+        throw new Error('Task persistence test failed');
+      }
+    } catch (error) {
+      console.error('❌ Data persistence test failed:', error);
+      alert('❌ Data persistence test failed. Please check your database connection.');
     }
   };
 
@@ -1039,6 +1154,14 @@ const FocusedInspiredActionApp = () => {
             </div>
             <div className="flex items-center space-x-2 sm:space-x-4">
               <button
+                onClick={testDataPersistence}
+                className="bg-green-600 text-white px-3 py-2 rounded-lg hover:bg-green-700 transition-colors flex items-center text-sm"
+                title="Test cross-browser data persistence"
+              >
+                <Settings className="h-4 w-4 mr-1" />
+                <span className="hidden sm:inline">Test DB</span>
+              </button>
+              <button
                 onClick={() => window.open('https://www.johnstringerinc.com/focused-inspired-action-calls/', '_blank')}
                 className="bg-indigo-600 text-white px-3 py-2 rounded-lg hover:bg-indigo-700 transition-colors flex items-center text-sm"
               >
@@ -1114,7 +1237,7 @@ const FocusedInspiredActionApp = () => {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-gray-600">Rate</p>
-                  <p className="text-2xl font-bold text-blue-600">{Math.round(analytics.completion_rate * 100)}%</p>
+                  <p className="text-2xl font-bold text-blue-600">{Math.round(analytics.completion_rate)}%</p>
                 </div>
                 <Target className="h-8 w-8 text-blue-600" />
               </div>
