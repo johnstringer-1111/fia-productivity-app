@@ -125,34 +125,75 @@ const FocusedInspiredActionApp = () => {
     }
   ];
 
-// SIMPLIFIED AUTH FLOW - PRODUCTION READY
+// PRODUCTION AUTH FLOW - Clean and professional
 useEffect(() => {
   let mounted = true;
-  
-  const { data: authListener } = onAuthChange(async (event, session) => {
-    if (!mounted) return;
-    
-    setAuthError('');
-    
-    if (session?.user) {
-      setUser(session.user);
-      
-      // Handle new user signup
-      if (event === 'SIGNED_UP') {
-        await handleNewUserSetup(session.user);
-      } else {
-        await loadUserData(session.user.id);
+  let authSubscription = null;
+
+  const initializeAuth = async () => {
+    try {
+      // Set up auth listener
+      const { data: listener } = onAuthChange(async (event, session) => {
+        if (!mounted) return;
+        
+        setAuthError('');
+        
+        try {
+          if (session?.user) {
+            setUser(session.user);
+            
+            // Handle new user signup
+            if (event === 'SIGNED_UP') {
+              await handleNewUserSetup(session.user);
+            } else {
+              await loadUserData(session.user.id);
+            }
+          } else {
+            resetUserState();
+          }
+        } catch (error) {
+          setAuthError('Unable to load your account. Please try refreshing the page.');
+          setLoading(false);
+          setCurrentView('dashboard');
+        }
+      });
+
+      authSubscription = listener;
+
+      // Check for existing session on mount
+      const { data: { user } } = await getCurrentUser();
+      if (user && mounted) {
+        setUser(user);
+        await loadUserData(user.id);
+      } else if (mounted) {
+        setCurrentView('home');
+        setLoading(false);
       }
-    } else {
-      // User signed out or no session
-      resetUserState();
+
+    } catch (error) {
+      if (mounted) {
+        setCurrentView('home');
+        setLoading(false);
+        setAuthError('Unable to connect. Please check your internet connection.');
+      }
     }
-  });
+  };
+
+  // Reasonable timeout to prevent infinite loading
+  const timeoutId = setTimeout(() => {
+    if (mounted && loading) {
+      setLoading(false);
+      setCurrentView(user ? 'dashboard' : 'home');
+    }
+  }, 8000);
+
+  initializeAuth();
 
   return () => {
     mounted = false;
-    if (authListener?.subscription?.unsubscribe) {
-      authListener.subscription.unsubscribe();
+    clearTimeout(timeoutId);
+    if (authSubscription?.subscription?.unsubscribe) {
+      authSubscription.subscription.unsubscribe();
     }
   };
 }, []);
@@ -167,6 +208,7 @@ const resetUserState = () => {
   setAnalytics(null);
   setCurrentView('home');
   setLoading(false);
+  setAuthError('');
 };
 
 // Handle new user setup
@@ -182,23 +224,30 @@ const handleNewUserSetup = async (user) => {
   }
 };
 
-// SIMPLIFIED USER DATA LOADING - PRODUCTION READY
+// PRODUCTION USER DATA LOADING - Clean and robust
 const loadUserData = async (userId) => {
-  try {
-    setLoading(true);
+  if (!userId) {
+    setCurrentView('home');
+    setLoading(false);
+    return;
+  }
 
-    // Load user profile - required for app flow
+  setLoading(true);
+
+  try {
+    // Load user profile - critical for app flow
     const profileResult = await getUserProfile(userId);
     
     if (!profileResult.success) {
-      // Profile doesn't exist, create it
       await createUserProfile({ id: userId, email: user?.email || '' });
       setCurrentView('onboarding');
+      setLoading(false);
       return;
     }
 
     if (!profileResult.data) {
       setCurrentView('onboarding');
+      setLoading(false);
       return;
     }
 
@@ -208,19 +257,29 @@ const loadUserData = async (userId) => {
     // Check if onboarding is complete
     if (!profileResult.data.onboarding_completed) {
       setCurrentView('onboarding');
+      setLoading(false);
       return;
     }
 
-    // Load user data in parallel - don't let failures block the UI
+    // Load other data with timeouts - don't let failures block the UI
+    const loadWithTimeout = (promise, timeout = 5000) => {
+      return Promise.race([
+        promise,
+        new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Timeout')), timeout)
+        )
+      ]);
+    };
+
     const [goalsResult, tasksResult, chatResult] = await Promise.allSettled([
-      loadGoals(userId),
-      loadTasks(userId),
-      loadChatHistory(userId)
+      loadWithTimeout(loadGoals(userId)),
+      loadWithTimeout(loadTasks(userId)),
+      loadWithTimeout(loadChatHistory(userId))
     ]);
 
     // Process goals
     if (goalsResult.status === 'fulfilled' && goalsResult.value.success) {
-      const formattedGoals = goalsResult.value.data.map(goal => ({
+      const formattedGoals = (goalsResult.value.data || []).map(goal => ({
         id: goal.id,
         title: goal.title,
         description: goal.description,
@@ -230,11 +289,13 @@ const loadUserData = async (userId) => {
         status: goal.status || 'active'
       }));
       setGoals(formattedGoals);
+    } else {
+      setGoals([]);
     }
 
     // Process tasks
     if (tasksResult.status === 'fulfilled' && tasksResult.value.success) {
-      const formattedTasks = tasksResult.value.data.map(task => ({
+      const formattedTasks = (tasksResult.value.data || []).map(task => ({
         id: task.id,
         title: task.title,
         description: task.description || '',
@@ -261,17 +322,38 @@ const loadUserData = async (userId) => {
         weekly_focus_time: 1240,
         completion_rate: formattedTasks.length > 0 ? (completedToday / formattedTasks.length) * 100 : 0
       });
+    } else {
+      setTasks([]);
+      setAnalytics({
+        tasks_completed_today: 0,
+        tasks_pending: 0,
+        productivity_score: 8.2,
+        weekly_focus_time: 1240,
+        completion_rate: 0
+      });
     }
 
     // Process chat history
     if (chatResult.status === 'fulfilled' && chatResult.value.success) {
-      setChatMessages(chatResult.value.messages);
+      setChatMessages(chatResult.value.messages || []);
+    } else {
+      setChatMessages([]);
     }
 
     setCurrentView('dashboard');
+
   } catch (error) {
-    setAuthError('Failed to load your data. Please refresh the page.');
-    setCurrentView('dashboard'); // Still show dashboard even if data fails
+    setAuthError('Some features may be limited due to connection issues.');
+    
+    // Still show dashboard even with errors
+    setAnalytics({
+      tasks_completed_today: 0,
+      tasks_pending: 0,
+      productivity_score: 8.2,
+      weekly_focus_time: 1240,
+      completion_rate: 0
+    });
+    setCurrentView('dashboard');
   } finally {
     setLoading(false);
   }
@@ -302,10 +384,11 @@ const loadUserData = async (userId) => {
 
       if (!result.success) {
         setAuthError(result.error);
+        setLoading(false);
       }
+      // Success handling will be done by auth listener
     } catch (error) {
-      setAuthError('Authentication failed. Please try again.');
-    } finally {
+      setAuthError('Unable to connect. Please check your internet connection and try again.');
       setLoading(false);
     }
   };
@@ -336,7 +419,7 @@ const loadUserData = async (userId) => {
       recorder.start();
       setIsRecording(true);
     } catch (error) {
-      alert('Could not start recording. Please check microphone permissions.');
+      alert('Unable to access microphone. Please check your browser permissions and try again.');
     }
   };
 
@@ -379,7 +462,7 @@ const loadUserData = async (userId) => {
         setTasks(prev => [savedTask, ...prev]);
       }
     } catch (error) {
-      alert('Error processing voice input. Please try again.');
+      alert('Unable to process voice input. Please try typing your task instead.');
     } finally {
       setLoading(false);
     }
@@ -430,7 +513,7 @@ const loadUserData = async (userId) => {
         throw new Error(result.error);
       }
     } catch (error) {
-      alert('Failed to create task. Please try again.');
+      alert('Unable to save task. Please check your connection and try again.');
     } finally {
       setLoading(false);
     }
@@ -475,7 +558,7 @@ const loadUserData = async (userId) => {
         }));
       }
     } catch (error) {
-      alert('Failed to update task. Please try again.');
+      alert('Unable to update task. Please check your connection and try again.');
     }
   };
 
@@ -488,7 +571,7 @@ const loadUserData = async (userId) => {
         setTasks(prev => prev.filter(task => task.id !== taskId));
       }
     } catch (error) {
-      alert('Failed to delete task. Please try again.');
+      alert('Unable to delete task. Please check your connection and try again.');
     }
   };
 
@@ -573,7 +656,7 @@ const loadUserData = async (userId) => {
       // Reload user data
       await loadUserData(user.id);
     } catch (error) {
-      alert('Failed to complete onboarding. Please try again.');
+      alert('Unable to complete setup. Please check your connection and try again.');
       setLoading(false);
     }
   };
@@ -642,7 +725,7 @@ const loadUserData = async (userId) => {
       setCurrentView('dashboard');
       alert('Welcome to F.I.A. Premium! 🎉\n\nYou now have access to:\n✅ Daily F.I.A. calls\n✅ Advanced AI coaching\n✅ Priority support');
     } catch (error) {
-      alert('Subscription failed. Please try again.');
+      alert('Unable to process subscription. Please try again or contact support.');
     }
   };
 
@@ -651,7 +734,7 @@ const loadUserData = async (userId) => {
       alert('1-Hour Aligned Accountability & Success Coaching call booking!\n\nPrice: $197\nYou will be redirected to schedule your session.');
       window.open('https://calendly.com/jsi-sessions/aligned-accountability-success-coaching', '_blank');
     } catch (error) {
-      alert('Could not open booking link. Please visit our website directly.');
+      alert('Unable to open booking page. Please visit our website directly or contact support.');
     }
   };
 
@@ -675,13 +758,14 @@ const loadUserData = async (userId) => {
     }
   };
 
-  // Loading state - SIMPLIFIED
-  if (loading && currentView === 'home') {
+  // Professional loading state for production
+  if (loading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-indigo-900 via-purple-900 to-pink-900 flex items-center justify-center">
         <div className="text-center">
           <Target className="h-12 w-12 text-white mx-auto mb-4 animate-spin" />
-          <div className="text-white text-xl">Loading F.I.A....</div>
+          <div className="text-white text-xl mb-2">Loading F.I.A.</div>
+          <div className="text-white/60 text-sm">Setting up your productivity workspace...</div>
         </div>
       </div>
     );
