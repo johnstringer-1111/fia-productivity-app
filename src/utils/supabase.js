@@ -1,5 +1,5 @@
 // src/utils/supabase.js
-// SECURE VERSION - Uses environment variables instead of hardcoded keys
+// COMPLETE VERSION - Full database persistence for all user data
 import { createClient } from '@supabase/supabase-js';
 
 // Use environment variables (secure approach)
@@ -95,12 +95,14 @@ export const updateUserProfile = async (userId, updates) => {
         ...updates,
         updated_at: new Date().toISOString()
       })
-      .eq('id', userId);
+      .eq('id', userId)
+      .select();
 
     if (error) throw error;
+    console.log('✅ User profile updated in database');
     return { success: true, data };
   } catch (error) {
-    console.error('Error updating user profile:', error);
+    console.error('❌ Error updating user profile:', error);
     return { success: false, error };
   }
 };
@@ -114,9 +116,10 @@ export const getUserProfile = async (userId) => {
       .single();
 
     if (error) throw error;
+    console.log('✅ User profile loaded from database');
     return { success: true, data };
   } catch (error) {
-    console.error('Error getting user profile:', error);
+    console.error('❌ Error getting user profile:', error);
     return { success: false, error };
   }
 };
@@ -128,17 +131,19 @@ export const saveChatMessage = async (userId, messageType, content, context = {}
       .from('ai_conversations')
       .insert([{
         user_id: userId,
-        conversation_id: `conv_${userId}_${new Date().toISOString().split('T')[0]}`, // Daily conversation groups
+        conversation_id: `conv_${userId}_${new Date().toISOString().split('T')[0]}`,
         message_type: messageType,
         content: content,
         context: context,
         voice_input: false
-      }]);
+      }])
+      .select();
 
     if (error) throw error;
+    console.log('✅ Chat message saved to database');
     return { success: true, data };
   } catch (error) {
-    console.error('Error saving message:', error);
+    console.error('❌ Error saving message:', error);
     return { success: false, error };
   }
 };
@@ -161,9 +166,10 @@ export const loadChatHistory = async (userId, limit = 20) => {
       context: row.context
     }));
 
+    console.log(`✅ Loaded ${messages.length} chat messages from database`);
     return { success: true, messages };
   } catch (error) {
-    console.error('Error loading chat history:', error);
+    console.error('❌ Error loading chat history:', error);
     return { success: false, error };
   }
 };
@@ -179,37 +185,49 @@ export const getRecentMessages = async (userId) => {
 
     if (error) throw error;
 
-    return data.reverse().map(row => ({
+    const messages = data.reverse().map(row => ({
       role: row.message_type,
       content: row.content
     }));
+
+    console.log(`✅ Loaded ${messages.length} recent messages for AI context`);
+    return messages;
   } catch (error) {
-    console.error('Error loading recent messages:', error);
+    console.error('❌ Error loading recent messages:', error);
     return [];
   }
 };
 
-// Goals and Tasks Functions
-export const saveGoals = async (userId, goals) => {
+// Goals Functions
+export const saveGoal = async (userId, goal) => {
   try {
-    const goalsToInsert = goals.map(goal => ({
+    const goalData = {
       user_id: userId,
       title: goal.title,
       description: goal.description,
-      priority: goal.priority,
+      priority: goal.priority || 'medium',
       status: goal.status || 'active',
       progress: goal.progress || 0,
-      target_date: goal.deadline || null
-    }));
+      target_date: goal.deadline ? goal.deadline.toISOString().split('T')[0] : null
+    };
 
-    const { data, error } = await supabase
-      .from('goals')
-      .upsert(goalsToInsert);
+    // If goal has an ID, update it; otherwise, insert new
+    let query;
+    if (goal.id && typeof goal.id === 'string' && goal.id.includes('-')) {
+      // Real UUID from database
+      query = supabase.from('goals').update(goalData).eq('id', goal.id).select();
+    } else {
+      // New goal or local ID
+      query = supabase.from('goals').insert([goalData]).select();
+    }
 
+    const { data, error } = await query;
     if (error) throw error;
-    return { success: true, data };
+
+    console.log('✅ Goal saved to database:', data[0]);
+    return { success: true, data: data[0] };
   } catch (error) {
-    console.error('Error saving goals:', error);
+    console.error('❌ Error saving goal:', error);
     return { success: false, error };
   }
 };
@@ -223,34 +241,66 @@ export const loadGoals = async (userId) => {
       .order('created_at', { ascending: false });
 
     if (error) throw error;
+    console.log(`✅ Loaded ${data.length} goals from database`);
     return { success: true, data };
   } catch (error) {
-    console.error('Error loading goals:', error);
+    console.error('❌ Error loading goals:', error);
     return { success: false, error };
   }
 };
 
-export const saveTasks = async (userId, tasks) => {
+export const updateGoalProgress = async (goalId, progress) => {
   try {
-    const tasksToInsert = tasks.map(task => ({
-      user_id: userId,
-      title: task.title,
-      description: task.description,
-      priority: task.priority,
-      status: task.status || 'pending',
-      due_date: task.due_date || null,
-      estimated_duration: task.estimated_duration || null,
-      voice_input: task.voice_input || false
-    }));
-
     const { data, error } = await supabase
-      .from('tasks')
-      .upsert(tasksToInsert);
+      .from('goals')
+      .update({ 
+        progress: progress,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', goalId)
+      .select();
 
     if (error) throw error;
-    return { success: true, data };
+    console.log('✅ Goal progress updated in database');
+    return { success: true, data: data[0] };
   } catch (error) {
-    console.error('Error saving tasks:', error);
+    console.error('❌ Error updating goal progress:', error);
+    return { success: false, error };
+  }
+};
+
+// Tasks Functions
+export const saveTask = async (userId, task) => {
+  try {
+    const taskData = {
+      user_id: userId,
+      title: task.title,
+      description: task.description || '',
+      priority: task.priority || 'medium',
+      status: task.status || 'pending',
+      due_date: task.due_date ? new Date(task.due_date).toISOString() : null,
+      estimated_duration: task.estimated_duration || null,
+      voice_input: task.voice_input || false,
+      completed_at: task.completed_at ? task.completed_at.toISOString() : null
+    };
+
+    // If task has a real UUID, update it; otherwise, insert new
+    let query;
+    if (task.id && typeof task.id === 'string' && task.id.includes('-')) {
+      // Real UUID from database
+      query = supabase.from('tasks').update(taskData).eq('id', task.id).select();
+    } else {
+      // New task or local ID
+      query = supabase.from('tasks').insert([taskData]).select();
+    }
+
+    const { data, error } = await query;
+    if (error) throw error;
+
+    console.log('✅ Task saved to database:', data[0]);
+    return { success: true, data: data[0] };
+  } catch (error) {
+    console.error('❌ Error saving task:', error);
     return { success: false, error };
   }
 };
@@ -264,9 +314,110 @@ export const loadTasks = async (userId) => {
       .order('created_at', { ascending: false });
 
     if (error) throw error;
+    console.log(`✅ Loaded ${data.length} tasks from database`);
     return { success: true, data };
   } catch (error) {
-    console.error('Error loading tasks:', error);
+    console.error('❌ Error loading tasks:', error);
+    return { success: false, error };
+  }
+};
+
+export const updateTaskStatus = async (taskId, status, completedAt = null) => {
+  try {
+    const updateData = { 
+      status: status,
+      updated_at: new Date().toISOString()
+    };
+
+    if (status === 'completed' && !completedAt) {
+      updateData.completed_at = new Date().toISOString();
+    } else if (status === 'pending') {
+      updateData.completed_at = null;
+    } else if (completedAt) {
+      updateData.completed_at = completedAt.toISOString();
+    }
+
+    const { data, error } = await supabase
+      .from('tasks')
+      .update(updateData)
+      .eq('id', taskId)
+      .select();
+
+    if (error) throw error;
+    console.log('✅ Task status updated in database');
+    return { success: true, data: data[0] };
+  } catch (error) {
+    console.error('❌ Error updating task status:', error);
+    return { success: false, error };
+  }
+};
+
+export const deleteTask = async (taskId) => {
+  try {
+    const { error } = await supabase
+      .from('tasks')
+      .delete()
+      .eq('id', taskId);
+
+    if (error) throw error;
+    console.log('✅ Task deleted from database');
+    return { success: true };
+  } catch (error) {
+    console.error('❌ Error deleting task:', error);
+    return { success: false, error };
+  }
+};
+
+// Bulk save functions for initial onboarding
+export const saveMultipleGoals = async (userId, goals) => {
+  try {
+    const goalsToInsert = goals.map(goal => ({
+      user_id: userId,
+      title: goal.title,
+      description: goal.description,
+      priority: goal.priority || 'medium',
+      status: goal.status || 'active',
+      progress: goal.progress || 0,
+      target_date: goal.deadline ? goal.deadline.toISOString().split('T')[0] : null
+    }));
+
+    const { data, error } = await supabase
+      .from('goals')
+      .insert(goalsToInsert)
+      .select();
+
+    if (error) throw error;
+    console.log(`✅ Saved ${data.length} goals to database`);
+    return { success: true, data };
+  } catch (error) {
+    console.error('❌ Error saving multiple goals:', error);
+    return { success: false, error };
+  }
+};
+
+export const saveMultipleTasks = async (userId, tasks) => {
+  try {
+    const tasksToInsert = tasks.map(task => ({
+      user_id: userId,
+      title: task.title,
+      description: task.description || '',
+      priority: task.priority || 'medium',
+      status: task.status || 'pending',
+      due_date: task.due_date ? new Date(task.due_date).toISOString() : null,
+      estimated_duration: task.estimated_duration || null,
+      voice_input: task.voice_input || false
+    }));
+
+    const { data, error } = await supabase
+      .from('tasks')
+      .insert(tasksToInsert)
+      .select();
+
+    if (error) throw error;
+    console.log(`✅ Saved ${data.length} tasks to database`);
+    return { success: true, data };
+  } catch (error) {
+    console.error('❌ Error saving multiple tasks:', error);
     return { success: false, error };
   }
 };
