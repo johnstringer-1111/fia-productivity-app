@@ -1,11 +1,32 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Calendar, Target, Users, CheckCircle, MessageCircle, Star, Clock, TrendingUp, BookOpen, Phone, DollarSign, LogOut, User, Mic, MicOff, Plus, Filter, BarChart3, Bell, Settings } from 'lucide-react';
+import { 
+  signUp, 
+  signIn, 
+  signOut, 
+  onAuthChange, 
+  getUserProfile, 
+  updateUserProfile,
+  saveChatMessage, 
+  loadChatHistory, 
+  getRecentMessages,
+  saveGoal,
+  loadGoals,
+  updateGoalProgress,
+  saveTask,
+  loadTasks,
+  updateTaskStatus,
+  deleteTask,
+  saveMultipleGoals,
+  saveMultipleTasks
+} from './utils/supabase';
 
 const FocusedInspiredActionApp = () => {
   // Core State
   const [currentView, setCurrentView] = useState('home');
   const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(false);
+  const [userProfile, setUserProfile] = useState(null);
+  const [loading, setLoading] = useState(true);
   
   // Onboarding State
   const [onboardingStep, setOnboardingStep] = useState(0);
@@ -41,7 +62,7 @@ const FocusedInspiredActionApp = () => {
     goal_id: null
   });
 
-  // Onboarding questions for expert productivity coaching
+  // Onboarding questions
   const onboardingQuestions = [
     {
       id: 'workStyle',
@@ -105,6 +126,150 @@ const FocusedInspiredActionApp = () => {
     }
   ];
 
+  // Initialize auth state
+  useEffect(() => {
+    const { data: authListener } = onAuthChange(async (event, session) => {
+      console.log('🔐 Auth state changed:', event, session?.user?.email);
+      setLoading(true);
+      
+      if (session?.user) {
+        setUser(session.user);
+        await loadUserData(session.user.id);
+      } else {
+        setUser(null);
+        setUserProfile(null);
+        setGoals([]);
+        setTasks([]);
+        setChatMessages([]);
+        setCurrentView('home');
+      }
+      
+      setLoading(false);
+    });
+
+    return () => {
+      authListener?.subscription?.unsubscribe();
+    };
+  }, []);
+
+  // Load user data from database
+  const loadUserData = async (userId) => {
+    try {
+      console.log('📊 Loading user data for:', userId);
+
+      // Load user profile
+      const profileResult = await getUserProfile(userId);
+      if (profileResult.success) {
+        setUserProfile(profileResult.data);
+        setOnboardingData(profileResult.data.onboarding_data || {});
+        
+        // If onboarding not completed, go to onboarding
+        if (!profileResult.data.onboarding_completed) {
+          console.log('🎯 User needs to complete onboarding');
+          setCurrentView('onboarding');
+          return;
+        }
+      }
+
+      // Load goals from database
+      const goalsResult = await loadGoals(userId);
+      if (goalsResult.success) {
+        const formattedGoals = goalsResult.data.map(goal => ({
+          id: goal.id,
+          title: goal.title,
+          description: goal.description,
+          priority: goal.priority,
+          progress: goal.progress,
+          deadline: goal.target_date ? new Date(goal.target_date) : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+          status: goal.status
+        }));
+        setGoals(formattedGoals);
+        console.log('🎯 Loaded goals:', formattedGoals.length);
+      }
+
+      // Load tasks from database
+      const tasksResult = await loadTasks(userId);
+      if (tasksResult.success) {
+        const formattedTasks = tasksResult.data.map(task => ({
+          id: task.id,
+          title: task.title,
+          description: task.description,
+          priority: task.priority,
+          status: task.status,
+          due_date: task.due_date ? new Date(task.due_date) : null,
+          estimated_duration: task.estimated_duration,
+          voice_input: task.voice_input,
+          completed_at: task.completed_at ? new Date(task.completed_at) : null
+        }));
+        setTasks(formattedTasks);
+        console.log('📋 Loaded tasks:', formattedTasks.length);
+      }
+
+      // Load chat history from database
+      const chatResult = await loadChatHistory(userId);
+      if (chatResult.success) {
+        setChatMessages(chatResult.messages);
+        console.log('💬 Loaded chat messages:', chatResult.messages.length);
+      }
+
+      // Calculate analytics from loaded data
+      const completedToday = formattedTasks?.filter(t => 
+        t.status === 'completed' && 
+        t.completed_at && 
+        t.completed_at.toDateString() === new Date().toDateString()
+      ).length || 0;
+
+      const pendingTasks = formattedTasks?.filter(t => t.status === 'pending').length || 0;
+
+      setAnalytics({
+        tasks_completed_today: completedToday,
+        tasks_pending: pendingTasks,
+        productivity_score: 8.2,
+        weekly_focus_time: 1240,
+        completion_rate: formattedTasks?.length > 0 ? completedToday / formattedTasks.length : 0
+      });
+
+      setCurrentView('dashboard');
+      console.log('✅ User data loaded successfully');
+    } catch (error) {
+      console.error('❌ Error loading user data:', error);
+    }
+  };
+
+  // Authentication Functions
+  const handleAuth = async () => {
+    try {
+      setLoading(true);
+      
+      let result;
+      if (authMode === 'signup') {
+        if (authData.password !== authData.confirmPassword) {
+          alert('Passwords do not match');
+          setLoading(false);
+          return;
+        }
+        result = await signUp(authData.email, authData.password);
+      } else {
+        result = await signIn(authData.email, authData.password);
+      }
+
+      if (!result.success) {
+        alert('Authentication error: ' + result.error);
+      }
+      // User state will be updated by the auth listener
+    } catch (error) {
+      alert('Authentication error: ' + error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSignOut = async () => {
+    console.log('🚪 Signing out user');
+    await signOut();
+    // User state will be cleared by the auth listener
+  };
+
   // Voice Recording Functions
   const startRecording = async () => {
     try {
@@ -141,34 +306,46 @@ const FocusedInspiredActionApp = () => {
     try {
       setLoading(true);
       
-      // For MVP: Simulate voice processing
-      setTimeout(() => {
-        const sampleTasks = [
-          {
-            id: Date.now(),
-            title: "Voice-created task",
-            description: "This task was created from voice input (simulated)",
-            priority: 'medium',
-            status: 'pending',
-            due_date: new Date(Date.now() + 24 * 60 * 60 * 1000),
-            estimated_duration: 30,
-            voice_input: true
-          }
-        ];
-        
-        setTasks(prev => [...prev, ...sampleTasks]);
-        alert('Voice input processed! Created 1 task from your speech.');
-        setLoading(false);
-      }, 2000);
+      // For now, create a sample voice task and save to database
+      const voiceTask = {
+        title: "Voice-created task",
+        description: "This task was created from voice input (simulated)",
+        priority: 'medium',
+        status: 'pending',
+        due_date: new Date(Date.now() + 24 * 60 * 60 * 1000),
+        estimated_duration: 30,
+        voice_input: true
+      };
       
+      // Save to database
+      const result = await saveTask(user.id, voiceTask);
+      if (result.success) {
+        const savedTask = {
+          id: result.data.id,
+          title: result.data.title,
+          description: result.data.description,
+          priority: result.data.priority,
+          status: result.data.status,
+          due_date: result.data.due_date ? new Date(result.data.due_date) : null,
+          estimated_duration: result.data.estimated_duration,
+          voice_input: result.data.voice_input,
+          completed_at: null
+        };
+        
+        setTasks(prev => [savedTask, ...prev]);
+        alert('Voice input processed! Created 1 task from your speech.');
+      } else {
+        throw new Error('Failed to save voice task');
+      }
+      
+      setLoading(false);
     } catch (error) {
       console.error('Error processing voice input:', error);
-      alert('Error processing voice input. This feature will be enhanced in the next version!');
+      alert('Error processing voice input. Task was not saved.');
       setLoading(false);
     }
   };
 
-  // Process audio chunks when recording stops
   useEffect(() => {
     if (audioChunks.length > 0 && !isRecording) {
       const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
@@ -177,147 +354,124 @@ const FocusedInspiredActionApp = () => {
     }
   }, [audioChunks, isRecording]);
 
-  // Authentication Functions
-  const handleAuth = async () => {
-    try {
-      setLoading(true);
-      const simulatedUser = { 
-        id: 'user-' + Date.now(), 
-        email: authData.email,
-        full_name: authData.email.split('@')[0]
-      };
-      
-      setUser(simulatedUser);
-      
-      if (authMode === 'signup') {
-        setCurrentView('onboarding');
-      } else {
-        await loadUserData(simulatedUser.id);
-        setCurrentView('dashboard');
-      }
-    } catch (error) {
-      alert('Authentication error: ' + error.message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleSignOut = async () => {
-    setUser(null);
-    setCurrentView('home');
-    setGoals([]);
-    setTasks([]);
-    setChatMessages([]);
-    setSubscription(null);
-  };
-
-  // Data Loading Functions
-  const loadUserData = async (userId) => {
-    try {
-      setGoals([
-        {
-          id: 1,
-          title: "Complete Q1 Business Goals",
-          description: "Focus on revenue growth and team expansion",
-          priority: 'high',
-          progress: 65,
-          deadline: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
-          status: 'active'
-        }
-      ]);
-
-      setTasks([
-        {
-          id: 1,
-          title: "Review monthly reports",
-          description: "Analyze performance metrics",
-          priority: 'high',
-          status: 'pending',
-          due_date: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000),
-          estimated_duration: 60,
-          voice_input: false
-        },
-        {
-          id: 2,
-          title: "Team standup meeting",
-          description: "Daily sync with development team",
-          priority: 'medium',
-          status: 'completed',
-          due_date: new Date(),
-          estimated_duration: 30,
-          voice_input: false,
-          completed_at: new Date()
-        }
-      ]);
-
-      setAnalytics({
-        tasks_completed_today: 3,
-        tasks_pending: 8,
-        productivity_score: 8.2,
-        weekly_focus_time: 1240,
-        completion_rate: 0.73
-      });
-      
-    } catch (error) {
-      console.error('Error loading user data:', error);
-    }
-  };
-
   // Task Management Functions
   const createTask = async () => {
-    try {
-      const task = {
-        ...newTask,
-        id: Date.now(),
-        user_id: user.id,
-        status: 'pending',
-        voice_input: false,
-        created_at: new Date()
-      };
+    if (!newTask.title.trim() || !user) return;
 
-      setTasks(prev => [...prev, task]);
-      setNewTask({
-        title: '',
-        description: '',
-        priority: 'medium',
-        due_date: '',
-        estimated_duration: 30,
-        goal_id: null
-      });
-      setShowTaskForm(false);
+    try {
+      console.log('📝 Creating new task:', newTask.title);
+      
+      // Save to database first
+      const result = await saveTask(user.id, newTask);
+      if (result.success) {
+        // Add to local state with database ID
+        const savedTask = {
+          id: result.data.id,
+          title: result.data.title,
+          description: result.data.description,
+          priority: result.data.priority,
+          status: result.data.status,
+          due_date: result.data.due_date ? new Date(result.data.due_date) : null,
+          estimated_duration: result.data.estimated_duration,
+          voice_input: result.data.voice_input,
+          completed_at: null
+        };
+        
+        setTasks(prev => [savedTask, ...prev]);
+        
+        // Reset form
+        setNewTask({
+          title: '',
+          description: '',
+          priority: 'medium',
+          due_date: '',
+          estimated_duration: 30,
+          goal_id: null
+        });
+        setShowTaskForm(false);
+        
+        console.log('✅ Task created and saved to database');
+      } else {
+        throw new Error(result.error);
+      }
     } catch (error) {
-      console.error('Error creating task:', error);
+      console.error('❌ Error creating task:', error);
+      alert('Failed to create task. Please try again.');
     }
   };
 
-  const toggleTaskCompletion = async (taskId, completed) => {
+  const toggleTaskCompletion = async (taskId, currentlyCompleted) => {
+    if (!user) return;
+
     try {
-      setTasks(prev => prev.map(task => 
-        task.id === taskId 
-          ? { 
-              ...task, 
-              status: completed ? 'pending' : 'completed',
-              completed_at: completed ? null : new Date()
-            } 
-          : task
-      ));
+      console.log('🔄 Toggling task completion:', taskId);
+      
+      const newStatus = currentlyCompleted ? 'pending' : 'completed';
+      const completedAt = currentlyCompleted ? null : new Date();
+      
+      // Update in database first
+      const result = await updateTaskStatus(taskId, newStatus, completedAt);
+      if (result.success) {
+        // Update local state
+        setTasks(prev => prev.map(task => 
+          task.id === taskId 
+            ? { 
+                ...task, 
+                status: newStatus,
+                completed_at: completedAt
+              } 
+            : task
+        ));
+        
+        // Update analytics
+        const updatedTasks = tasks.map(task => 
+          task.id === taskId 
+            ? { ...task, status: newStatus, completed_at: completedAt }
+            : task
+        );
+        
+        const completedToday = updatedTasks.filter(t => 
+          t.status === 'completed' && 
+          t.completed_at && 
+          t.completed_at.toDateString() === new Date().toDateString()
+        ).length;
+        
+        setAnalytics(prev => ({
+          ...prev,
+          tasks_completed_today: completedToday,
+          tasks_pending: updatedTasks.filter(t => t.status === 'pending').length
+        }));
+        
+        console.log('✅ Task status updated in database');
+      } else {
+        throw new Error(result.error);
+      }
     } catch (error) {
-      console.error('Error updating task:', error);
+      console.error('❌ Error updating task:', error);
+      alert('Failed to update task. Please try again.');
     }
   };
 
   // AI Chat Function
   const sendMessage = async () => {
-    if (!newMessage.trim()) return;
+    if (!newMessage.trim() || !user) return;
 
     const userMessage = { role: 'user', content: newMessage, timestamp: new Date() };
     setChatMessages(prev => [...prev, userMessage]);
-    const messageToSend = newMessage; // Store before clearing
-    setNewMessage(''); // Clear the input
+    const messageToSend = newMessage;
+    setNewMessage('');
     setLoading(true);
 
+    // Save user message to database
+    await saveChatMessage(user.id, 'user', messageToSend, {
+      goals: goals.map(g => g.title),
+      tasks: tasks.slice(0, 3).map(t => t.title)
+    });
+
     try {
-      // 🚀 REAL AI CALL to your API route
+      // Get recent conversation history for AI context
+      const recentMessages = await getRecentMessages(user.id);
+
       const response = await fetch('/api/ai-coach', {
         method: 'POST',
         headers: {
@@ -327,7 +481,8 @@ const FocusedInspiredActionApp = () => {
           message: messageToSend,
           userGoals: goals,
           userTasks: tasks,
-          onboardingData: onboardingData
+          onboardingData: onboardingData,
+          recentMessages: recentMessages
         })
       });
 
@@ -341,16 +496,20 @@ const FocusedInspiredActionApp = () => {
       };
       setChatMessages(prev => [...prev, aiMessage]);
 
+      // Save AI response to database
+      await saveChatMessage(user.id, 'assistant', aiResponse);
+
     } catch (error) {
       console.error('Error:', error);
       
-      // Fallback message
       const fallbackMessage = {
         role: 'assistant',
         content: "I'm here to help you stay productive! What's your most important task right now? 💪",
         timestamp: new Date()
       };
       setChatMessages(prev => [...prev, fallbackMessage]);
+      
+      await saveChatMessage(user.id, 'assistant', fallbackMessage.content);
     } finally {
       setLoading(false);
     }
@@ -374,8 +533,19 @@ const FocusedInspiredActionApp = () => {
 
   const completeOnboarding = async (data) => {
     try {
+      console.log('🎯 Completing onboarding with data:', data);
+      
+      // Save onboarding data to user profile
+      await updateUserProfile(user.id, {
+        onboarding_completed: true,
+        onboarding_data: data
+      });
+
+      // Generate and save initial goals and tasks
       await generateInitialCoachingPlan(data);
-      setCurrentView('dashboard');
+      
+      // Reload user data to refresh everything
+      await loadUserData(user.id);
     } catch (error) {
       console.error('Error completing onboarding:', error);
     }
@@ -383,61 +553,55 @@ const FocusedInspiredActionApp = () => {
 
   const generateInitialCoachingPlan = async (data) => {
     try {
+      console.log('🏗️ Generating initial coaching plan');
+      
       const initialGoals = [
         {
-          id: 1,
-          user_id: user.id,
           title: "Morning Routine Optimization",
           description: `Tailored for your ${data.schedule || 'preferred work time'}`,
-          deadline: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
           priority: 'high',
           progress: 0,
-          status: 'active'
+          status: 'active',
+          deadline: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
         },
         {
-          id: 2,
-          user_id: user.id,
           title: "Focused Work Implementation",
           description: `${data.workStyle || 'Your preferred work style'} approach`,
-          deadline: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
           priority: 'high',
           progress: 0,
-          status: 'active'
+          status: 'active',
+          deadline: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000)
         }
       ];
 
-      setGoals(initialGoals);
-
       const initialTasks = [
         {
-          id: 1,
-          user_id: user.id,
-          goal_id: 1,
           title: "Design your ideal morning routine",
           description: "Create a structured start to your day",
           status: 'pending',
           priority: 'high',
-          due_date: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000),
           estimated_duration: 45,
-          voice_input: false
+          voice_input: false,
+          due_date: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000)
         },
         {
-          id: 2,
-          user_id: user.id,
-          goal_id: 2,
           title: "Block calendar for deep work",
           description: "Schedule uninterrupted focus time",
           status: 'pending',
           priority: 'medium',
-          due_date: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000),
           estimated_duration: 30,
-          voice_input: false
+          voice_input: false,
+          due_date: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000)
         }
       ];
 
-      setTasks(initialTasks);
+      // Save to database
+      await saveMultipleGoals(user.id, initialGoals);
+      await saveMultipleTasks(user.id, initialTasks);
+      
+      console.log('✅ Initial coaching plan saved to database');
     } catch (error) {
-      console.error('Error generating coaching plan:', error);
+      console.error('❌ Error generating coaching plan:', error);
     }
   };
 
@@ -489,6 +653,15 @@ const FocusedInspiredActionApp = () => {
       default: return 'bg-gray-100 text-gray-800';
     }
   };
+
+  // Loading state
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-indigo-900 via-purple-900 to-pink-900 flex items-center justify-center">
+        <div className="text-white text-xl">Loading F.I.A....</div>
+      </div>
+    );
+  }
 
   // Render Functions
   const renderAuth = () => (
