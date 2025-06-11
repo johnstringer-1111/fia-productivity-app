@@ -6,7 +6,7 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const { message, userGoals, userTasks, onboardingData } = req.body;
+  const { message, userGoals, userTasks, onboardingData, recentMessages } = req.body;
   console.log('📥 Received message:', message);
 
   if (!message) {
@@ -30,9 +30,12 @@ USER PREFERENCES & STYLE:
 • Best Work Time: ${onboardingData?.schedule || 'Not specified'}
 • Accountability Style: ${onboardingData?.accountability?.join(', ') || 'Not specified'}
 
-USER MESSAGE: ${message}
+RECENT CONVERSATION HISTORY:
+${recentMessages?.map(msg => `${msg.role}: ${msg.content}`).join('\n') || 'This is the start of our conversation'}
 
-Based on their personal work style and challenges, provide specific, actionable productivity coaching. Reference their preferences when relevant. Keep responses under 150 words and be encouraging.`;
+CURRENT USER MESSAGE: ${message}
+
+Based on their personal work style, challenges, and our conversation history, provide specific, actionable productivity coaching. Reference previous discussions when relevant. Keep responses under 150 words and be encouraging.`;
 
     console.log('📝 Sending prompt to Claude...');
 
