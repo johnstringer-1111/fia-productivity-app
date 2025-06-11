@@ -1,13 +1,15 @@
 // src/utils/supabase.js
-// QUICK FIX - No validation, just create the client
+// TEMPORARY HARDCODED VERSION - Replace with your actual Supabase values
 import { createClient } from '@supabase/supabase-js';
 
-// Get environment variables (no validation)
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
+// REPLACE THESE WITH YOUR ACTUAL VALUES (temporarily)
+const supabaseUrl = 'https://eukbotdgyqtcwrfwtwso.supabase.co'; // Your actual Supabase URL from context
+const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImV1a2JvdGRneXF0Y3dyZnd0d3NvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDk0Nzg4NzMsImV4cCI6MjA2NTA1NDg3M30.j30bPCjK0w2vB7anM8jL5-CJ3SFs0MbEieCcRIQZUog'; // REPLACE WITH YOUR ACTUAL ANON KEY
 
-// Create Supabase client (will handle empty values gracefully)
+// Create Supabase client
 const supabase = createClient(supabaseUrl, supabaseAnonKey);
+
+console.log('✅ Supabase client created with hardcoded values');
 
 // Auth Functions
 export const signUp = async (email, password) => {
@@ -207,13 +209,10 @@ export const saveGoal = async (userId, goal) => {
       target_date: goal.deadline ? goal.deadline.toISOString().split('T')[0] : null
     };
 
-    // If goal has an ID, update it; otherwise, insert new
     let query;
     if (goal.id && typeof goal.id === 'string' && goal.id.includes('-')) {
-      // Real UUID from database
       query = supabase.from('goals').update(goalData).eq('id', goal.id).select();
     } else {
-      // New goal or local ID
       query = supabase.from('goals').insert([goalData]).select();
     }
 
@@ -277,13 +276,10 @@ export const saveTask = async (userId, task) => {
       completed_at: task.completed_at ? task.completed_at.toISOString() : null
     };
 
-    // If task has a real UUID, update it; otherwise, insert new
     let query;
     if (task.id && typeof task.id === 'string' && task.id.includes('-')) {
-      // Real UUID from database
       query = supabase.from('tasks').update(taskData).eq('id', task.id).select();
     } else {
-      // New task or local ID
       query = supabase.from('tasks').insert([taskData]).select();
     }
 
@@ -357,7 +353,6 @@ export const deleteTask = async (taskId) => {
   }
 };
 
-// Bulk save functions for initial onboarding
 export const saveMultipleGoals = async (userId, goals) => {
   try {
     const goalsToInsert = goals.map(goal => ({
