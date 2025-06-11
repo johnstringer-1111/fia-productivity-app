@@ -5,6 +5,7 @@ import {
   signIn, 
   signOut, 
   onAuthChange, 
+  getCurrentUser,
   getUserProfile, 
   updateUserProfile,
   createUserProfile,
