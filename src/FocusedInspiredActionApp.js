@@ -326,7 +326,8 @@ const FocusedInspiredActionApp = () => {
         body: JSON.stringify({
           message: messageToSend,
           userGoals: goals,
-          userTasks: tasks
+          userTasks: tasks,
+          onboardingData: onboardingData
         })
       });
 
