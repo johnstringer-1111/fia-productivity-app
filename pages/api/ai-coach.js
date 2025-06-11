@@ -1,6 +1,5 @@
 // pages/api/ai-coach.js
 // Simple single endpoint for AI coaching
-// Copy this EXACT file to your project
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -17,8 +16,8 @@ export default async function handler(req, res) {
     // Simple prompt with user context
     const prompt = `You are F.I.A. (Focused Inspired Action), an AI productivity coach. 
 
-User's Current Goals: ${userGoals?.map(g => g.text).join(', ') || 'None set'}
-User's Recent Tasks: ${userTasks?.slice(0, 3).map(t => t.text).join(', ') || 'None'}
+User's Current Goals: ${userGoals?.map(g => g.title).join(', ') || 'None set'}
+User's Recent Tasks: ${userTasks?.slice(0, 3).map(t => t.title).join(', ') || 'None'}
 
 User Message: ${message}
 
