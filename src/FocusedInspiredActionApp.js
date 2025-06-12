@@ -722,12 +722,66 @@ const loadUserData = async (userId) => {
     }
 
     try {
-      // For now, we'll skip the update since the endpoint isn't documented
-      // This will be read-only import until we find the update endpoint
-      console.log(`Would sync task ${task.title} to Simpleology as ${completed ? 'completed' : 'pending'}`);
-      
-      // TODO: Implement when update endpoint is found
-      // Likely: PUT /api/v1/daily-targets/${task.simpleology_id}
+      // Try multiple common REST endpoint patterns for updating daily targets
+      const endpoints = [
+        // Most common pattern: PUT with ID
+        {
+          url: `https://my.simpleology.com/api/v1/daily-targets/${task.simpleology_id}`,
+          method: 'PUT',
+          body: { achieved: completed ? 'y' : 'n' }
+        },
+        // Alternative: PATCH with ID  
+        {
+          url: `https://my.simpleology.com/api/v1/daily-targets/${task.simpleology_id}`,
+          method: 'PATCH', 
+          body: { achieved: completed ? 'y' : 'n' }
+        },
+        // Alternative: POST to complete endpoint
+        {
+          url: `https://my.simpleology.com/api/v1/daily-targets/${task.simpleology_id}/complete`,
+          method: 'POST',
+          body: { achieved: completed ? 'y' : 'n' }
+        }
+      ];
+
+      let syncSuccess = false;
+
+      // Try each endpoint until one works
+      for (const endpoint of endpoints) {
+        try {
+          const response = await fetch(endpoint.url, {
+            method: endpoint.method,
+            headers: {
+              'Authorization': `Basic ${btoa(simpleologyApiKey + ':')}`,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(endpoint.body)
+          });
+
+          if (response.ok) {
+            const responseData = await response.json();
+            
+            // Check if response has error
+            if (responseData.error) {
+              console.log(`Endpoint ${endpoint.method} ${endpoint.url} returned error:`, responseData.error.message);
+              continue; // Try next endpoint
+            }
+
+            console.log(`✅ Task synced with Simpleology via ${endpoint.method}: ${task.title}`);
+            syncSuccess = true;
+            break; // Success! Stop trying other endpoints
+          } else {
+            console.log(`Endpoint ${endpoint.method} ${endpoint.url} returned ${response.status}`);
+          }
+        } catch (endpointError) {
+          console.log(`Endpoint ${endpoint.method} ${endpoint.url} failed:`, endpointError.message);
+        }
+      }
+
+      if (!syncSuccess) {
+        console.log(`⚠️ Could not find working sync endpoint for task: ${task.title}`);
+        // Don't show user alert - just log the issue
+      }
       
     } catch (error) {
       console.error('❌ Failed to sync task with Simpleology:', error);
