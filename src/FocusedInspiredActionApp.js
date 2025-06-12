@@ -582,7 +582,7 @@ const loadUserData = async (userId) => {
     }
   }, [audioChunks, isRecording]);
 
-  // Simpleology Integration Functions
+  // UPDATED SIMPLEOLOGY INTEGRATION FUNCTIONS - Import only, no sync-back
   const connectSimpleology = async (apiKey) => {
     if (!apiKey.trim()) {
       alert('Please enter your Simpleology API key');
@@ -621,7 +621,7 @@ const loadUserData = async (userId) => {
         simpleology_connected: true
       });
 
-      alert('✅ Simpleology connected successfully!');
+      alert('✅ Simpleology connected successfully!\n\nNote: You can import daily targets to F.I.A., but changes in F.I.A. won\'t sync back to Simpleology (API limitation).');
       setShowSimpleologySettings(false);
       
     } catch (error) {
@@ -661,24 +661,35 @@ const loadUserData = async (userId) => {
       }
 
       // Transform Simpleology targets to F.I.A. tasks
-      // The API returns { "data": [...] } format
       const targets = responseData.data || [];
       
-      const importedTasks = targets.map(target => ({
+      if (targets.length === 0) {
+        alert('No daily targets found in Simpleology for today.');
+        return;
+      }
+
+      // Filter out targets that are already imported (avoid duplicates)
+      const existingSimpleologyIds = tasks
+        .filter(t => t.simpleology_id)
+        .map(t => t.simpleology_id);
+      
+      const newTargets = targets.filter(target => !existingSimpleologyIds.includes(target.id));
+      
+      if (newTargets.length === 0) {
+        alert('All Simpleology targets have already been imported.');
+        return;
+      }
+      
+      const importedTasks = newTargets.map(target => ({
         title: target.item || 'Imported Task',
         description: `Imported from Simpleology${target.comment ? ': ' + target.comment : ''}`,
         priority: 'medium',
         status: target.achieved === 'y' ? 'completed' : 'pending',
         estimated_duration: 30,
         voice_input: false,
-        simpleology_id: target.id, // Store Simpleology ID for sync
+        simpleology_id: target.id, // Store Simpleology ID for reference
         imported_from_simpleology: true
       }));
-
-      if (importedTasks.length === 0) {
-        alert('No daily targets found in Simpleology for today.');
-        return;
-      }
 
       // Save imported tasks to database
       const results = await Promise.all(
@@ -704,97 +715,13 @@ const loadUserData = async (userId) => {
 
       setTasks(prev => [...newTasks, ...prev]);
       
-      alert(`✅ Imported ${successfulImports.length} tasks from Simpleology!`);
+      alert(`✅ Imported ${successfulImports.length} new tasks from Simpleology!\n\nNote: Changes to these tasks in F.I.A. won't sync back to Simpleology due to API limitations.`);
       
     } catch (error) {
       console.error('Simpleology import error:', error);
       alert(`❌ Failed to import Simpleology targets: ${error.message}`);
     } finally {
       setSyncingSimpleology(false);
-    }
-  };
-
-  const syncTaskToSimpleology = async (taskId, completed) => {
-    const task = tasks.find(t => t.id === taskId);
-    
-    // Debug: Show what we found
-    alert(`Debug Info:
-- Task found: ${task ? 'YES' : 'NO'}
-- Has simpleology_id: ${task?.simpleology_id ? 'YES (' + task.simpleology_id + ')' : 'NO'}
-- Simpleology connected: ${simpleologyConnected ? 'YES' : 'NO'}
-- Will sync: ${(task?.simpleology_id && simpleologyConnected) ? 'YES' : 'NO'}`);
-    
-    if (!task?.simpleology_id || !simpleologyConnected) {
-      return; // Only sync tasks that came from Simpleology
-    }
-
-    try {
-      alert(`Attempting to sync task: ${task.title}`);
-      
-      // Try multiple common REST endpoint patterns for updating daily targets
-      const endpoints = [
-        // Most common pattern: PUT with ID
-        {
-          url: `https://my.simpleology.com/api/v1/daily-targets/${task.simpleology_id}`,
-          method: 'PUT',
-          body: { achieved: completed ? 'y' : 'n' }
-        },
-        // Alternative: PATCH with ID  
-        {
-          url: `https://my.simpleology.com/api/v1/daily-targets/${task.simpleology_id}`,
-          method: 'PATCH', 
-          body: { achieved: completed ? 'y' : 'n' }
-        },
-        // Alternative: POST to complete endpoint
-        {
-          url: `https://my.simpleology.com/api/v1/daily-targets/${task.simpleology_id}/complete`,
-          method: 'POST',
-          body: { achieved: completed ? 'y' : 'n' }
-        }
-      ];
-
-      let syncSuccess = false;
-
-      // Try each endpoint until one works
-      for (const endpoint of endpoints) {
-        try {
-          alert(`Trying ${endpoint.method} ${endpoint.url}`);
-          
-          const response = await fetch(endpoint.url, {
-            method: endpoint.method,
-            headers: {
-              'Authorization': `Basic ${btoa(simpleologyApiKey + ':')}`,
-              'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(endpoint.body)
-          });
-
-          alert(`Response: ${response.status} ${response.statusText}`);
-
-          if (response.ok) {
-            const responseData = await response.json();
-            
-            // Check if response has error
-            if (responseData.error) {
-              alert(`API Error: ${responseData.error.message}`);
-              continue; // Try next endpoint
-            }
-
-            alert(`✅ SUCCESS! Task synced with Simpleology`);
-            syncSuccess = true;
-            break; // Success! Stop trying other endpoints
-          }
-        } catch (endpointError) {
-          alert(`Endpoint failed: ${endpointError.message}`);
-        }
-      }
-
-      if (!syncSuccess) {
-        alert(`⚠️ Could not find working sync endpoint`);
-      }
-      
-    } catch (error) {
-      alert(`❌ Sync error: ${error.message}`);
     }
   };
 
@@ -858,6 +785,7 @@ const loadUserData = async (userId) => {
     }
   };
 
+  // UPDATED: Removed sync-back to Simpleology since API doesn't support updates
   const toggleTaskCompletion = async (taskId, currentlyCompleted) => {
     if (!user) return;
 
@@ -877,8 +805,8 @@ const loadUserData = async (userId) => {
             : task
         ));
         
-        // Sync with Simpleology if this task was imported from there
-        await syncTaskToSimpleology(taskId, !currentlyCompleted);
+        // REMOVED: Sync with Simpleology (API doesn't support updates)
+        // await syncTaskToSimpleology(taskId, !currentlyCompleted);
         
         // Update analytics
         const updatedTasks = tasks.map(task => 
@@ -1372,6 +1300,7 @@ const loadUserData = async (userId) => {
     </div>
   );
 
+  // UPDATED: Simpleology Settings UI with clear messaging about import-only functionality
   const renderSimpleologySettings = () => (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
       <div className="bg-white rounded-2xl shadow-xl p-6 max-w-md w-full">
@@ -1382,9 +1311,21 @@ const loadUserData = async (userId) => {
         
         {!simpleologyConnected ? (
           <div className="space-y-4">
-            <p className="text-gray-600 text-sm">
-              Connect your Simpleology account to import your daily targets as tasks and sync completion status automatically.
-            </p>
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4">
+              <h4 className="font-medium text-blue-800 mb-2">What This Integration Does:</h4>
+              <ul className="text-sm text-blue-700 space-y-1">
+                <li>• ✅ Import your daily targets from Simpleology to F.I.A.</li>
+                <li>• ✅ Avoid duplicate imports (smart filtering)</li>
+                <li>• ✅ Preserve original task status</li>
+                <li>• ❌ Two-way sync not supported (Simpleology API limitation)</li>
+              </ul>
+            </div>
+            
+            <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-4">
+              <p className="text-amber-800 text-sm">
+                <strong>Note:</strong> Changes made to imported tasks in F.I.A. will NOT sync back to Simpleology due to API limitations. This is import-only.
+              </p>
+            </div>
             
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -1429,8 +1370,16 @@ const loadUserData = async (userId) => {
                 <span className="text-green-800 font-medium">Connected to Simpleology</span>
               </div>
               <p className="text-green-700 text-sm mt-1">
-                Your daily targets will sync automatically with F.I.A.
+                Your daily targets can be imported to F.I.A.
               </p>
+            </div>
+            
+            <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+              <h4 className="font-medium text-amber-800 mb-1">Integration Status:</h4>
+              <ul className="text-sm text-amber-700 space-y-1">
+                <li>• ✅ Import daily targets → F.I.A.</li>
+                <li>• ❌ F.I.A. changes → Simpleology (API doesn't support updates)</li>
+              </ul>
             </div>
             
             <div className="space-y-3">
