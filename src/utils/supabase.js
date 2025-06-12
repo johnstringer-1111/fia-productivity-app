@@ -220,7 +220,7 @@ export const loadGoals = async (userId) => {
   }
 };
 
-// Tasks Functions
+// Tasks Functions - FIXED: Now properly saves Simpleology fields
 export const saveTask = async (userId, task) => {
   try {
     const taskData = {
@@ -232,7 +232,10 @@ export const saveTask = async (userId, task) => {
       due_date: task.due_date ? new Date(task.due_date).toISOString() : null,
       estimated_duration: task.estimated_duration || null,
       voice_input: task.voice_input || false,
-      completed_at: task.completed_at ? new Date(task.completed_at).toISOString() : null
+      completed_at: task.completed_at ? new Date(task.completed_at).toISOString() : null,
+      // 🔥 FIX: Include Simpleology fields in database save
+      simpleology_id: task.simpleology_id || null,
+      imported_from_simpleology: task.imported_from_simpleology || false
     };
 
     let query;
@@ -308,7 +311,7 @@ export const deleteTask = async (taskId) => {
   }
 };
 
-// Bulk Operations
+// Bulk Operations - FIXED: Include Simpleology fields in bulk saves
 export const saveMultipleGoals = async (userId, goals) => {
   try {
     const goalsToInsert = goals.map(goal => ({
@@ -344,7 +347,10 @@ export const saveMultipleTasks = async (userId, tasks) => {
       status: task.status || 'pending',
       due_date: task.due_date ? new Date(task.due_date).toISOString() : null,
       estimated_duration: task.estimated_duration || null,
-      voice_input: task.voice_input || false
+      voice_input: task.voice_input || false,
+      // 🔥 FIX: Include Simpleology fields in bulk operations too
+      simpleology_id: task.simpleology_id || null,
+      imported_from_simpleology: task.imported_from_simpleology || false
     }));
 
     const { data, error } = await supabase
