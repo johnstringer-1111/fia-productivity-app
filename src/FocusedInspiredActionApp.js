@@ -1235,62 +1235,93 @@ const loadUserData = async (userId) => {
         <h3 className="text-xl font-bold text-gray-900 mb-4">Create New Task</h3>
         
         <div className="space-y-4">
-          <input
-            type="text"
-            placeholder="Task title"
-            value={newTask.title}
-            onChange={(e) => setNewTask(prev => ({ ...prev, title: e.target.value }))}
-            className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:border-indigo-300"
-          />
-          
-          <textarea
-            placeholder="Description (optional)"
-            value={newTask.description}
-            onChange={(e) => setNewTask(prev => ({ ...prev, description: e.target.value }))}
-            className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:border-indigo-300 h-20 resize-none"
-          />
-          
-          <div className="grid grid-cols-2 gap-4">
-            <select
-              value={newTask.priority}
-              onChange={(e) => setNewTask(prev => ({ ...prev, priority: e.target.value }))}
-              className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:border-indigo-300"
-            >
-              <option value="low">Low Priority</option>
-              <option value="medium">Medium Priority</option>
-              <option value="high">High Priority</option>
-              <option value="urgent">Urgent</option>
-            </select>
-            
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Task Title *
+            </label>
             <input
-              type="number"
-              placeholder="Duration in minutes"
-              value={newTask.estimated_duration}
-              onChange={(e) => setNewTask(prev => ({ ...prev, estimated_duration: parseInt(e.target.value) }))}
+              type="text"
+              placeholder="What needs to be done?"
+              value={newTask.title}
+              onChange={(e) => setNewTask(prev => ({ ...prev, title: e.target.value }))}
               className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:border-indigo-300"
-              min="1"
-              max="480"
             />
           </div>
           
-          <input
-            type="datetime-local"
-            value={newTask.due_date}
-            onChange={(e) => setNewTask(prev => ({ ...prev, due_date: e.target.value }))}
-            className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:border-indigo-300"
-          />
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Description
+            </label>
+            <textarea
+              placeholder="Additional details (optional)"
+              value={newTask.description}
+              onChange={(e) => setNewTask(prev => ({ ...prev, description: e.target.value }))}
+              className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:border-indigo-300 h-20 resize-none"
+            />
+          </div>
           
-          <div className="flex space-x-3">
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Priority
+              </label>
+              <select
+                value={newTask.priority}
+                onChange={(e) => setNewTask(prev => ({ ...prev, priority: e.target.value }))}
+                className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:border-indigo-300"
+              >
+                <option value="low">Low Priority</option>
+                <option value="medium">Medium Priority</option>
+                <option value="high">High Priority</option>
+                <option value="urgent">Urgent</option>
+              </select>
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Estimated Duration
+              </label>
+              <div className="relative">
+                <input
+                  type="number"
+                  placeholder="30"
+                  value={newTask.estimated_duration}
+                  onChange={(e) => setNewTask(prev => ({ ...prev, estimated_duration: parseInt(e.target.value) }))}
+                  className="w-full p-3 pr-16 border border-gray-300 rounded-lg focus:outline-none focus:border-indigo-300"
+                  min="1"
+                  max="480"
+                />
+                <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
+                  <span className="text-gray-500 text-sm">minutes</span>
+                </div>
+              </div>
+              <p className="text-xs text-gray-500 mt-1">How long will this take?</p>
+            </div>
+          </div>
+          
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Due Date (Optional)
+            </label>
+            <input
+              type="datetime-local"
+              value={newTask.due_date}
+              onChange={(e) => setNewTask(prev => ({ ...prev, due_date: e.target.value }))}
+              className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:border-indigo-300"
+            />
+          </div>
+          
+          <div className="flex space-x-3 pt-4">
             <button
               onClick={createTask}
               disabled={!newTask.title.trim() || loading}
-              className="flex-1 bg-indigo-600 text-white py-3 rounded-lg hover:bg-indigo-700 transition-colors disabled:bg-gray-300"
+              className="flex-1 bg-indigo-600 text-white py-3 rounded-lg hover:bg-indigo-700 transition-colors disabled:bg-gray-300 font-medium"
             >
               {loading ? 'Creating...' : 'Create Task'}
             </button>
             <button
               onClick={() => setShowTaskForm(false)}
-              className="flex-1 border border-gray-300 text-gray-700 py-3 rounded-lg hover:bg-gray-50 transition-colors"
+              className="flex-1 border border-gray-300 text-gray-700 py-3 rounded-lg hover:bg-gray-50 transition-colors font-medium"
             >
               Cancel
             </button>
