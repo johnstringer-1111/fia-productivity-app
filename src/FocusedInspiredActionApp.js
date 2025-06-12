@@ -468,42 +468,42 @@ const loadUserData = async (userId) => {
     }
   };
 
-// Enhanced handle sign out with cache clearing
-const handleSignOut = async () => {
-  try {
-    setLoading(true);
-    
-    // Clear all local state first
-    resetUserState();
-    
-    // Sign out from Supabase
-    await signOut();
-    
-    // Force clear any cached auth state
-    if (typeof window !== 'undefined') {
-      // Clear localStorage if it exists (fail silently)
-      try {
-        localStorage.removeItem('supabase.auth.token');
-        localStorage.removeItem('sb-eukbotdgyqtcwrfwtwso-auth-token');
-      } catch (e) {
-        // Ignore localStorage errors
+  // Enhanced handle sign out with cache clearing
+  const handleSignOut = async () => {
+    try {
+      setLoading(true);
+      
+      // Clear all local state first
+      resetUserState();
+      
+      // Sign out from Supabase
+      await signOut();
+      
+      // Force clear any cached auth state
+      if (typeof window !== 'undefined') {
+        // Clear localStorage if it exists (fail silently)
+        try {
+          localStorage.removeItem('supabase.auth.token');
+          localStorage.removeItem('sb-eukbotdgyqtcwrfwtwso-auth-token');
+        } catch (e) {
+          // Ignore localStorage errors
+        }
+        
+        // Clear sessionStorage if it exists (fail silently)  
+        try {
+          sessionStorage.clear();
+        } catch (e) {
+          // Ignore sessionStorage errors
+        }
       }
       
-      // Clear sessionStorage if it exists (fail silently)  
-      try {
-        sessionStorage.clear();
-      } catch (e) {
-        // Ignore sessionStorage errors
-      }
+    } catch (error) {
+      // Even if signout fails, reset the app state
+      resetUserState();
+    } finally {
+      setLoading(false);
     }
-    
-  } catch (error) {
-    // Even if signout fails, reset the app state
-    resetUserState();
-  } finally {
-    setLoading(false);
-  }
-};
+  };
 
   // Voice Recording Functions
   const startRecording = async () => {
@@ -600,23 +600,33 @@ const handleSignOut = async () => {
         }
       });
 
-      if (response.ok) {
-        setSimpleologyApiKey(apiKey);
-        setSimpleologyConnected(true);
-        
-        // Save API key to user profile
-        await updateUserProfile(user.id, {
-          simpleology_api_key: apiKey,
-          simpleology_connected: true
-        });
-
-        alert('✅ Simpleology connected successfully!');
-        setShowSimpleologySettings(false);
-      } else {
-        throw new Error('Invalid API key or connection failed');
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
+
+      const responseData = await response.json();
+      
+      // Check if there's an error in the response
+      if (responseData.error) {
+        throw new Error(responseData.error.message || 'Invalid API key');
+      }
+
+      // If we get here, the API key is valid
+      setSimpleologyApiKey(apiKey);
+      setSimpleologyConnected(true);
+      
+      // Save API key to user profile
+      await updateUserProfile(user.id, {
+        simpleology_api_key: apiKey,
+        simpleology_connected: true
+      });
+
+      alert('✅ Simpleology connected successfully!');
+      setShowSimpleologySettings(false);
+      
     } catch (error) {
-      alert('❌ Failed to connect to Simpleology. Please check your API key and try again.');
+      console.error('Simpleology connection error:', error);
+      alert(`❌ Failed to connect to Simpleology: ${error.message}`);
     } finally {
       setSyncingSimpleology(false);
     }
@@ -643,19 +653,27 @@ const handleSignOut = async () => {
         throw new Error('Failed to fetch daily targets');
       }
 
-      const data = await response.json();
+      const responseData = await response.json();
       
+      // Check if there's an error in the response
+      if (responseData.error) {
+        throw new Error(responseData.error.message || 'API Error');
+      }
+
       // Transform Simpleology targets to F.I.A. tasks
-      const importedTasks = data?.map(target => ({
-        title: target.name || target.title || target.task || 'Imported Task',
-        description: `Imported from Simpleology: ${target.description || target.notes || ''}`,
+      // The API returns { "data": [...] } format
+      const targets = responseData.data || [];
+      
+      const importedTasks = targets.map(target => ({
+        title: target.item || 'Imported Task',
+        description: `Imported from Simpleology${target.comment ? ': ' + target.comment : ''}`,
         priority: 'medium',
-        status: target.completed || target.done ? 'completed' : 'pending',
-        estimated_duration: target.estimated_time || target.duration || 30,
+        status: target.achieved === 'y' ? 'completed' : 'pending',
+        estimated_duration: 30,
         voice_input: false,
         simpleology_id: target.id, // Store Simpleology ID for sync
         imported_from_simpleology: true
-      })) || [];
+      }));
 
       if (importedTasks.length === 0) {
         alert('No daily targets found in Simpleology for today.');
@@ -689,7 +707,8 @@ const handleSignOut = async () => {
       alert(`✅ Imported ${successfulImports.length} tasks from Simpleology!`);
       
     } catch (error) {
-      alert('❌ Failed to import Simpleology targets. Please try again.');
+      console.error('Simpleology import error:', error);
+      alert(`❌ Failed to import Simpleology targets: ${error.message}`);
     } finally {
       setSyncingSimpleology(false);
     }
