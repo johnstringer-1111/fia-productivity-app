@@ -365,4 +365,219 @@ export const saveMultipleTasks = async (userId, tasks) => {
   }
 };
 
+// ============ NEW TIMER FUNCTIONS ============
+
+// Start task timer
+export const startTaskTimer = async (taskId, userId) => {
+  try {
+    // Update task timer fields
+    const { error: taskError } = await supabase
+      .from('tasks')
+      .update({
+        timer_start_time: new Date().toISOString(),
+        timer_is_running: true,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', taskId);
+
+    if (taskError) throw taskError;
+
+    // Create a new timer session
+    const { data: sessionData, error: sessionError } = await supabase
+      .from('timer_sessions')
+      .insert([{
+        task_id: taskId,
+        user_id: userId,
+        start_time: new Date().toISOString(),
+        pause_count: 0
+      }])
+      .select()
+      .single();
+
+    if (sessionError) throw sessionError;
+
+    return { success: true, data: sessionData };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+};
+
+// Pause task timer
+export const pauseTaskTimer = async (taskId, userId) => {
+  try {
+    // Get current task timer state
+    const { data: task, error: fetchError } = await supabase
+      .from('tasks')
+      .select('timer_start_time, timer_total_time, timer_pause_count')
+      .eq('id', taskId)
+      .single();
+
+    if (fetchError) throw fetchError;
+
+    // Calculate elapsed time since last start
+    const startTime = new Date(task.timer_start_time);
+    const now = new Date();
+    const elapsedSeconds = Math.floor((now - startTime) / 1000);
+    const newTotalTime = (task.timer_total_time || 0) + elapsedSeconds;
+
+    // Update task
+    const { error: updateError } = await supabase
+      .from('tasks')
+      .update({
+        timer_total_time: newTotalTime,
+        timer_pause_count: (task.timer_pause_count || 0) + 1,
+        timer_is_running: false,
+        timer_last_paused: now.toISOString(),
+        updated_at: now.toISOString()
+      })
+      .eq('id', taskId);
+
+    if (updateError) throw updateError;
+
+    // Update the current timer session
+    const { error: sessionError } = await supabase
+      .from('timer_sessions')
+      .update({
+        pause_count: supabase.sql`pause_count + 1`
+      })
+      .eq('task_id', taskId)
+      .is('end_time', null);
+
+    if (sessionError) throw sessionError;
+
+    return { success: true, data: { totalTime: newTotalTime } };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+};
+
+// Resume task timer (after pause)
+export const resumeTaskTimer = async (taskId, userId) => {
+  try {
+    // Simply update the start time to now and set running to true
+    const { error } = await supabase
+      .from('tasks')
+      .update({
+        timer_start_time: new Date().toISOString(),
+        timer_is_running: true,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', taskId);
+
+    if (error) throw error;
+
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+};
+
+// Stop task timer
+export const stopTaskTimer = async (taskId, userId) => {
+  try {
+    // Get current task timer state
+    const { data: task, error: fetchError } = await supabase
+      .from('tasks')
+      .select('timer_start_time, timer_total_time, timer_is_running, timer_pause_count')
+      .eq('id', taskId)
+      .single();
+
+    if (fetchError) throw fetchError;
+
+    let finalTotalTime = task.timer_total_time || 0;
+
+    // If timer is running, add the elapsed time
+    if (task.timer_is_running && task.timer_start_time) {
+      const startTime = new Date(task.timer_start_time);
+      const now = new Date();
+      const elapsedSeconds = Math.floor((now - startTime) / 1000);
+      finalTotalTime += elapsedSeconds;
+    }
+
+    // Update task - reset timer fields
+    const { error: updateError } = await supabase
+      .from('tasks')
+      .update({
+        timer_total_time: finalTotalTime,
+        timer_is_running: false,
+        timer_start_time: null,
+        timer_last_paused: null,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', taskId);
+
+    if (updateError) throw updateError;
+
+    // Complete the current timer session
+    const { error: sessionError } = await supabase
+      .from('timer_sessions')
+      .update({
+        end_time: new Date().toISOString(),
+        total_duration: finalTotalTime
+      })
+      .eq('task_id', taskId)
+      .is('end_time', null);
+
+    if (sessionError) throw sessionError;
+
+    return { success: true, data: { totalTime: finalTotalTime, pauseCount: task.timer_pause_count } };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+};
+
+// Get task timer data
+export const getTaskTimerData = async (taskId) => {
+  try {
+    const { data, error } = await supabase
+      .from('tasks')
+      .select('timer_start_time, timer_total_time, timer_pause_count, timer_is_running, timer_last_paused')
+      .eq('id', taskId)
+      .single();
+
+    if (error) throw error;
+
+    // Calculate current elapsed time if timer is running
+    let currentElapsed = 0;
+    if (data.timer_is_running && data.timer_start_time) {
+      const startTime = new Date(data.timer_start_time);
+      const now = new Date();
+      currentElapsed = Math.floor((now - startTime) / 1000);
+    }
+
+    return { 
+      success: true, 
+      data: {
+        ...data,
+        current_elapsed: currentElapsed,
+        total_with_current: (data.timer_total_time || 0) + currentElapsed
+      }
+    };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+};
+
+// Get timer sessions for analytics
+export const getTimerSessions = async (userId, taskId = null) => {
+  try {
+    let query = supabase
+      .from('timer_sessions')
+      .select('*')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false });
+
+    if (taskId) {
+      query = query.eq('task_id', taskId);
+    }
+
+    const { data, error } = await query;
+
+    if (error) throw error;
+    return { success: true, data: data || [] };
+  } catch (error) {
+    return { success: false, error: error.message, data: [] };
+  }
+};
+
 export default supabase;
