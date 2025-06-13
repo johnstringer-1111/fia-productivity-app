@@ -2354,3 +2354,134 @@ export default FocusedInspiredActionApp;flex items-center">
           <div className="space-y-6">
             <div className="bg-white rounded-xl shadow-sm p-6">
               <h2 className="text-xl font-bold text-gray-900 mb-4
+flex items-center">
+                <MessageCircle className="h-5 w-5 mr-2 text-indigo-600" />
+                AI Productivity Coach
+              </h2>
+              
+              <div className="h-64 overflow-y-auto mb-4 space-y-3 border rounded-lg p-3 bg-gray-50">
+                {chatMessages.length === 0 && (
+                  <div className="text-center py-8">
+                    <MessageCircle className="h-8 w-8 text-gray-300 mx-auto mb-2" />
+                    <p className="text-gray-500 text-sm">Ask your AI coach anything about productivity!</p>
+                    <div className="mt-3 space-y-1 text-xs text-gray-400">
+                      <p>• "How do I stay focused?"</p>
+                      <p>• "Help me prioritize my tasks"</p>
+                      <p>• "I'm feeling overwhelmed"</p>
+                    </div>
+                  </div>
+                )}
+                {chatMessages.map((message, index) => (
+                  <div
+                    key={index}
+                    className={`p-3 rounded-lg max-w-[80%] ${
+                      message.role === 'user'
+                        ? 'bg-indigo-100 text-indigo-900 ml-auto'
+                        : 'bg-white text-gray-900 border'
+                    }`}
+                  >
+                    <p className="text-sm">{message.content}</p>
+                    <span className="text-xs text-gray-500 mt-1 block">
+                      {message.timestamp.toLocaleTimeString()}
+                    </span>
+                  </div>
+                ))}
+                {loading && (
+                  <div className="bg-white border rounded-lg p-3 max-w-[80%]">
+                    <div className="flex items-center space-x-2">
+                      <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" />
+                      <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }} />
+                      <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }} />
+                    </div>
+                  </div>
+                )}
+              </div>
+              
+              <div className="flex space-x-2">
+                <input
+                  type="text"
+                  value={newMessage}
+                  onChange={(e) => setNewMessage(e.target.value)}
+                  placeholder="Ask your coach anything..."
+                  className="flex-1 p-2 border border-gray-300 rounded-lg focus:outline-none focus:border-indigo-300 text-sm"
+                  onKeyPress={(e) => e.key === 'Enter' && sendMessage()}
+                  disabled={loading}
+                />
+                <button
+                  onClick={sendMessage}
+                  disabled={loading || !newMessage.trim()}
+                  className="bg-indigo-600 text-white px-3 py-2 rounded-lg hover:bg-indigo-700 transition-colors disabled:bg-gray-300"
+                >
+                  Send
+                </button>
+              </div>
+            </div>
+
+            <div className="bg-white rounded-xl shadow-sm p-6">
+              <h3 className="font-semibold text-gray-900 mb-4">Quick Actions</h3>
+              <div className="space-y-3">
+                <button
+                  onClick={bookCoachingCall}
+                  className="w-full bg-gradient-to-r from-yellow-500 to-orange-500 text-white p-3 rounded-lg hover:from-yellow-600 hover:to-orange-600 transition-colors text-sm font-medium"
+                >
+                  📞 Book 1-Hour Coaching Call ($197)
+                </button>
+                
+                <button
+                  onClick={() => window.open('https://www.johnstringerinc.com/focused-inspired-action-calls/', '_blank')}
+                  className="w-full bg-green-100 text-green-700 p-3 rounded-lg hover:bg-green-200 transition-colors text-sm font-medium"
+                >
+                  🎯 Join Daily F.I.A. Call
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+
+  // Main render logic
+  if (showTaskForm) {
+    return (
+      <div>
+        {renderDashboard()}
+        {renderTaskForm()}
+      </div>
+    );
+  }
+
+  if (showSimpleologySettings) {
+    return (
+      <div>
+        {renderDashboard()}
+        {renderSimpleologySettings()}
+      </div>
+    );
+  }
+
+  if (currentView === 'subscription') {
+    return (
+      <div>
+        {renderDashboard()}
+        {renderSubscriptionModal()}
+      </div>
+    );
+  }
+
+  if (currentView === 'auth') {
+    return renderAuth();
+  }
+
+  if (currentView === 'onboarding') {
+    return renderOnboarding();
+  }
+
+  if (currentView === 'dashboard') {
+    return renderDashboard();
+  }
+
+  return renderHome();
+};
+
+export default FocusedInspiredActionApp;
