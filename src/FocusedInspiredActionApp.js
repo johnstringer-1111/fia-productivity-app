@@ -2095,4 +2095,392 @@ const loadUserData = async (userId) => {
   return renderHome();
 };
 
+export default FocusedInspiredActionApp;flex items-center">
+                <Target className="h-5 w-5 mr-2 text-indigo-600" />
+                Your Goals
+              </h2>
+              <div className="space-y-4">
+                {goals.length === 0 ? (
+                  <div className="text-center py-8">
+                    <Target className="h-12 w-12 text-gray-300 mx-auto mb-2" />
+                    <p className="text-gray-500">Complete your onboarding to get personalized goals!</p>
+                    <button
+                      onClick={() => setCurrentView('onboarding')}
+                      className="mt-2 text-indigo-600 hover:text-indigo-700"
+                    >
+                      Start Onboarding
+                    </button>
+                  </div>
+                ) : (
+                  goals.map(goal => (
+                    <div key={goal.id} className="border border-gray-200 rounded-lg p-4">
+                      <div className="flex justify-between items-start mb-2">
+                        <h3 className="font-semibold text-gray-900">{goal.title}</h3>
+                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${getPriorityColor(goal.priority)}`}>
+                          {goal.priority}
+                        </span>
+                      </div>
+                      <p className="text-gray-600 text-sm mb-3">{goal.description}</p>
+                      <div className="flex items-center justify-between">
+                        <div className="flex-1 bg-gray-200 rounded-full h-2 mr-4">
+                          <div
+                            className="bg-indigo-600 h-2 rounded-full"
+                            style={{ width: `${goal.progress}%` }}
+                          />
+                        </div>
+                        <span className="text-sm text-gray-500">
+                          {goal.progress}% • Due: {goal.deadline.toLocaleDateString()}
+                        </span>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+
+            <div className="bg-white rounded-xl shadow-sm p-6">
+              <div className="flex justify-between items-center mb-4">
+                <h2 className="text-xl font-bold text-gray-900 flex items-center">
+                  <CheckCircle className="h-5 w-5 mr-2 text-indigo-600" />
+                  Your Tasks
+                </h2>
+                <div className="flex items-center space-x-2">
+                  <button
+                    onClick={isRecording ? stopRecording : startRecording}
+                    className={`p-2 rounded-lg transition-colors ${
+                      isRecording 
+                        ? 'bg-red-100 text-red-600 hover:bg-red-200' 
+                        : 'bg-indigo-100 text-indigo-600 hover:bg-indigo-200'
+                    }`}
+                    title={isRecording ? 'Stop recording' : 'Voice input'}
+                    disabled={loading}
+                  >
+                    {isRecording ? <MicOff className="h-5 w-5" /> : <Mic className="h-5 w-5" />}
+                  </button>
+
+                  {simpleologyConnected && (
+                    <button
+                      onClick={importSimpleologyTargets}
+                      disabled={syncingSimpleology}
+                      className="bg-green-100 text-green-600 px-3 py-2 rounded-lg hover:bg-green-200 transition-colors flex items-center text-sm"
+                      title="Import today's targets from Simpleology"
+                    >
+                      <Target className="h-4 w-4 mr-1" />
+                      {syncingSimpleology ? 'Importing...' : 'Import'}
+                    </button>
+                  )}
+                  
+                  <button
+                    onClick={() => setShowTaskForm(true)}
+                    className="bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 transition-colors flex items-center"
+                  >
+                    <Plus className="h-4 w-4 mr-1" />
+                    Add Task
+                  </button>
+                </div>
+              </div>
+
+              {isRecording && (
+                <div className="bg-red-50 border border-red-200 rounded-lg p-3 mb-4 flex items-center">
+                  <div className="flex items-center space-x-2">
+                    <div className="w-3 h-3 bg-red-500 rounded-full animate-pulse" />
+                    <span className="text-red-700 font-medium">Recording... Speak your tasks</span>
+                  </div>
+                  <button
+                    onClick={stopRecording}
+                    className="ml-auto bg-red-600 text-white px-3 py-1 rounded text-sm hover:bg-red-700"
+                  >
+                    Stop & Process
+                  </button>
+                </div>
+              )}
+
+              <div className="flex space-x-1 mb-4 bg-gray-100 rounded-lg p-1">
+                {[
+                  { key: 'pending', label: 'Pending', count: tasks.filter(t => t.status === 'pending').length },
+                  { key: 'in_progress', label: 'In Progress', count: tasks.filter(t => t.status === 'in_progress').length },
+                  { key: 'completed', label: 'Completed', count: tasks.filter(t => t.status === 'completed').length }
+                ].map(tab => (
+                  <button
+                    key={tab.key}
+                    onClick={() => setActiveTab(tab.key)}
+                    className={`flex-1 py-2 px-3 rounded-md text-sm font-medium transition-colors ${
+                      activeTab === tab.key
+                        ? 'bg-white text-indigo-600 shadow-sm'
+                        : 'text-gray-600 hover:text-gray-900'
+                    }`}
+                  >
+                    {tab.label} ({tab.count})
+                  </button>
+                ))}
+              </div>
+
+              <div className="space-y-3">
+                {getFilteredTasks().length === 0 ? (
+                  <div className="text-center py-8">
+                    <CheckCircle className="h-12 w-12 text-gray-300 mx-auto mb-2" />
+                    <p className="text-gray-500">
+                      {activeTab === 'pending' && 'No pending tasks. Great job!'}
+                      {activeTab === 'in_progress' && 'No tasks in progress.'}
+                      {activeTab === 'completed' && 'No completed tasks yet.'}
+                    </p>
+                  </div>
+                ) : (
+                  getFilteredTasks().map(task => (
+                    <div key={task.id} className="flex items-center space-x-3 p-3 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors group">
+                      <input
+                        type="checkbox"
+                        checked={task.status === 'completed'}
+                        onChange={() => toggleTaskCompletion(task.id, task.status === 'completed')}
+                        className="h-5 w-5 text-indigo-600 rounded"
+                      />
+                      <div className="flex-1">
+                        <div className="flex items-center space-x-2 mb-1">
+                          <h4 className={`font-medium ${task.status === 'completed' ? 'line-through text-gray-500' : 'text-gray-900'}`}>
+                            {task.title}
+                          </h4>
+                          {task.voice_input && (
+                            <Mic className="h-4 w-4 text-indigo-500" title="Created via voice input" />
+                          )}
+                          {task.imported_from_simpleology && (
+                            <Target className="h-4 w-4 text-green-500" title="Imported from Simpleology" />
+                          )}
+                        </div>
+                        {task.description && (
+                          <p className="text-sm text-gray-600 mb-1">{task.description}</p>
+                        )}
+                        <div className="flex items-center space-x-3 text-xs text-gray-500">
+                          {task.due_date && (
+                            <span>Due: {new Date(task.due_date).toLocaleDateString()}</span>
+                          )}
+                          {task.estimated_duration && (
+                            <span>Est: {task.estimated_duration} min</span>
+                          )}
+                          {(task.timer_total_time > 0 || task.timer_is_running) && (
+                            <span className="flex items-center">
+                              <Timer className="h-3 w-3 mr-1" />
+                              {formatTime(activeTimers[task.id] || task.timer_total_time || 0)}
+                              {task.timer_pause_count > 0 && (
+                                <span className="ml-1 text-gray-400">
+                                  ({task.timer_pause_count} pauses)
+                                </span>
+                              )}
+                            </span>
+                          )}
+                          {task.completed_at && (
+                            <span>Done: {new Date(task.completed_at).toLocaleDateString()}</span>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        {/* Timer Controls */}
+                        {task.status !== 'completed' && (
+                          <div className="flex items-center space-x-1">
+                            {!task.timer_is_running && !task.timer_start_time && (
+                              <button
+                                onClick={() => handleStartTimer(task.id)}
+                                className="p-1.5 bg-green-100 text-green-600 hover:bg-green-200 rounded transition-colors"
+                                title="Start timer"
+                                disabled={loading}
+                              >
+                                <Play className="h-4 w-4" />
+                              </button>
+                            )}
+                            {task.timer_is_running && (
+                              <>
+                                <button
+                                  onClick={() => handlePauseTimer(task.id)}
+                                  className="p-1.5 bg-yellow-100 text-yellow-600 hover:bg-yellow-200 rounded transition-colors"
+                                  title="Pause timer"
+                                  disabled={loading}
+                                >
+                                  <Pause className="h-4 w-4" />
+                                </button>
+                                <button
+                                  onClick={() => handleStopTimer(task.id)}
+                                  className="p-1.5 bg-red-100 text-red-600 hover:bg-red-200 rounded transition-colors"
+                                  title="Stop timer"
+                                  disabled={loading}
+                                >
+                                  <Square className="h-4 w-4" />
+                                </button>
+                              </>
+                            )}
+                            {!task.timer_is_running && task.timer_total_time > 0 && (
+                              <>
+                                <button
+                                  onClick={() => handleResumeTimer(task.id)}
+                                  className="p-1.5 bg-blue-100 text-blue-600 hover:bg-blue-200 rounded transition-colors"
+                                  title="Resume timer"
+                                  disabled={loading}
+                                >
+                                  <Play className="h-4 w-4" />
+                                </button>
+                                <button
+                                  onClick={() => handleStopTimer(task.id)}
+                                  className="p-1.5 bg-red-100 text-red-600 hover:bg-red-200 rounded transition-colors"
+                                  title="Stop timer"
+                                  disabled={loading}
+                                >
+                                  <Square className="h-4 w-4" />
+                                </button>
+                              </>
+                            )}
+                          </div>
+                        )}
+                        
+                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${getPriorityColor(task.priority)}`}>
+                          {task.priority}
+                        </span>
+                        <button
+                          onClick={() => {
+                            if (window.confirm('Are you sure you want to delete this task?')) {
+                              removeTask(task.id);
+                            }
+                          }}
+                          className="opacity-0 group-hover:opacity-100 p-1 text-gray-400 hover:text-red-600 transition-all duration-200"
+                          title="Delete task"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          </div>
+
+          <div className="space-y-6">
+            <div className="bg-white rounded-xl shadow-sm p-6">
+              <h2 className="text-xl font-bold text-gray-900 mb-4 flex items-center">
+                <MessageCircle className="h-5 w-5 mr-2 text-indigo-600" />
+                AI Productivity Coach
+              </h2>
+              
+              <div className="h-64 overflow-y-auto mb-4 space-y-3 border rounded-lg p-3 bg-gray-50">
+                {chatMessages.length === 0 && (
+                  <div className="text-center py-8">
+                    <MessageCircle className="h-8 w-8 text-gray-300 mx-auto mb-2" />
+                    <p className="text-gray-500 text-sm">Ask your AI coach anything about productivity!</p>
+                    <div className="mt-3 space-y-1 text-xs text-gray-400">
+                      <p>• "How do I stay focused?"</p>
+                      <p>• "Help me prioritize my tasks"</p>
+                      <p>• "I'm feeling overwhelmed"</p>
+                    </div>
+                  </div>
+                )}
+                {chatMessages.map((message, index) => (
+                  <div
+                    key={index}
+                    className={`p-3 rounded-lg max-w-[80%] ${
+                      message.role === 'user'
+                        ? 'bg-indigo-100 text-indigo-900 ml-auto'
+                        : 'bg-white text-gray-900 border'
+                    }`}
+                  >
+                    <p className="text-sm">{message.content}</p>
+                    <span className="text-xs text-gray-500 mt-1 block">
+                      {message.timestamp.toLocaleTimeString()}
+                    </span>
+                  </div>
+                ))}
+                {loading && (
+                  <div className="bg-white border rounded-lg p-3 max-w-[80%]">
+                    <div className="flex items-center space-x-2">
+                      <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" />
+                      <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }} />
+                      <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }} />
+                    </div>
+                  </div>
+                )}
+              </div>
+              
+              <div className="flex space-x-2">
+                <input
+                  type="text"
+                  value={newMessage}
+                  onChange={(e) => setNewMessage(e.target.value)}
+                  placeholder="Ask your coach anything..."
+                  className="flex-1 p-2 border border-gray-300 rounded-lg focus:outline-none focus:border-indigo-300 text-sm"
+                  onKeyPress={(e) => e.key === 'Enter' && sendMessage()}
+                  disabled={loading}
+                />
+                <button
+                  onClick={sendMessage}
+                  disabled={loading || !newMessage.trim()}
+                  className="bg-indigo-600 text-white px-3 py-2 rounded-lg hover:bg-indigo-700 transition-colors disabled:bg-gray-300"
+                >
+                  Send
+                </button>
+              </div>
+            </div>
+
+            <div className="bg-white rounded-xl shadow-sm p-6">
+              <h3 className="font-semibold text-gray-900 mb-4">Quick Actions</h3>
+              <div className="space-y-3">
+                <button
+                  onClick={bookCoachingCall}
+                  className="w-full bg-gradient-to-r from-yellow-500 to-orange-500 text-white p-3 rounded-lg hover:from-yellow-600 hover:to-orange-600 transition-colors text-sm font-medium"
+                >
+                  📞 Book 1-Hour Coaching Call ($197)
+                </button>
+                
+                <button
+                  onClick={() => window.open('https://www.johnstringerinc.com/focused-inspired-action-calls/', '_blank')}
+                  className="w-full bg-green-100 text-green-700 p-3 rounded-lg hover:bg-green-200 transition-colors text-sm font-medium"
+                >
+                  🎯 Join Daily F.I.A. Call
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+
+  // Main render logic
+  if (showTaskForm) {
+    return (
+      <div>
+        {renderDashboard()}
+        {renderTaskForm()}
+      </div>
+    );
+  }
+
+  if (showSimpleologySettings) {
+    return (
+      <div>
+        {renderDashboard()}
+        {renderSimpleologySettings()}
+      </div>
+    );
+  }
+
+  if (currentView === 'subscription') {
+    return (
+      <div>
+        {renderDashboard()}
+        {renderSubscriptionModal()}
+      </div>
+    );
+  }
+
+  if (currentView === 'auth') {
+    return renderAuth();
+  }
+
+  if (currentView === 'onboarding') {
+    return renderOnboarding();
+  }
+
+  if (currentView === 'dashboard') {
+    return renderDashboard();
+  }
+
+  return renderHome();
+};
+
 export default FocusedInspiredActionApp;
