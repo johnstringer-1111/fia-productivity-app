@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Calendar, Target, Users, CheckCircle, MessageCircle, Star, Clock, TrendingUp, BookOpen, Phone, DollarSign, LogOut, User, Mic, MicOff, Plus, Filter, BarChart3, Bell, Settings, Trash2 } from 'lucide-react';
+import { Calendar, Target, Users, CheckCircle, MessageCircle, Star, Clock, TrendingUp, BookOpen, Phone, DollarSign, LogOut, User, Mic, MicOff, Plus, Filter, BarChart3, Bell, Settings, Trash2, Play, Pause, Square, Timer } from 'lucide-react';
 mport { 
   signUp, 
   signIn, 
