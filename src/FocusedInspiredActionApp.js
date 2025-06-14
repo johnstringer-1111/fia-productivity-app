@@ -172,7 +172,7 @@ const FocusedInspiredActionApp = () => {
 
   const handleStartTimer = async (taskId) => {
     try {
-      setLoading(true);
+
       const result = await startTaskTimer(taskId, user.id);
       
       if (result.success) {
@@ -203,13 +203,12 @@ const FocusedInspiredActionApp = () => {
     } catch (error) {
       alert('Error starting timer');
     } finally {
-      setLoading(false);
+
     }
   };
 
   const handlePauseTimer = async (taskId) => {
     try {
-      setLoading(true);
       const result = await pauseTaskTimer(taskId, user.id);
       
       if (result.success) {
@@ -240,13 +239,12 @@ const FocusedInspiredActionApp = () => {
     } catch (error) {
       alert('Error pausing timer');
     } finally {
-      setLoading(false);
     }
   };
 
   const handleResumeTimer = async (taskId) => {
     try {
-      setLoading(true);
+
       const result = await resumeTaskTimer(taskId, user.id);
       
       if (result.success) {
@@ -275,13 +273,12 @@ const FocusedInspiredActionApp = () => {
     } catch (error) {
       alert('Error resuming timer');
     } finally {
-      setLoading(false);
     }
   };
 
   const handleStopTimer = async (taskId) => {
     try {
-      setLoading(true);
+
       const result = await stopTaskTimer(taskId, user.id);
       
       if (result.success) {
@@ -330,7 +327,7 @@ const FocusedInspiredActionApp = () => {
     } catch (error) {
       alert('Error stopping timer');
     } finally {
-      setLoading(false);
+
     }
   };
 
