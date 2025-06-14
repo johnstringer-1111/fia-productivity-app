@@ -442,16 +442,26 @@ export const pauseTaskTimer = async (taskId, userId) => {
 
     if (updateError) throw updateError;
 
-    // Update current session pause count
-    const { error: sessionError } = await supabase
+    // Get current session to update pause count
+    const { data: sessionData, error: sessionFetchError } = await supabase
       .from('timer_sessions')
-      .update({
-        pause_count: supabase.raw('pause_count + 1')
-      })
+      .select('pause_count')
       .eq('task_id', taskId)
-      .is('end_time', null);
+      .is('end_time', null)
+      .single();
 
-    if (sessionError) throw sessionError;
+    if (!sessionFetchError && sessionData) {
+      // Update current session pause count
+      const { error: sessionError } = await supabase
+        .from('timer_sessions')
+        .update({
+          pause_count: (sessionData.pause_count || 0) + 1
+        })
+        .eq('task_id', taskId)
+        .is('end_time', null);
+
+      if (sessionError) throw sessionError;
+    }
 
     return { success: true, task: updatedTask };
   } catch (error) {
