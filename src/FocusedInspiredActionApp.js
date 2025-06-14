@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Calendar, Target, Users, CheckCircle, MessageCircle, Star, Clock, TrendingUp, BookOpen, Phone, DollarSign, LogOut, User, Mic, MicOff, Plus, Filter, BarChart3, Bell, Settings, Trash2, Play, Pause, Square, Timer } from 'lucide-react';
-mport { 
+import { 
   signUp, 
   signIn, 
   signOut, 
