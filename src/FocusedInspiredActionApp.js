@@ -621,7 +621,7 @@ const loadUserData = async (userId) => {
         voice_input: task.voice_input || false,
         completed_at: task.completed_at ? new Date(task.completed_at) : null,
         simpleology_id: task.simpleology_id || null,
-        imported_from_simpleology: task.imported_from_simpleology || false
+        imported_from_simpleology: task.imported_from_simpleology || false,
 // Timer fields
 timer_start_time: task.timer_start_time || null,
 timer_total_time: task.timer_total_time || 0,
