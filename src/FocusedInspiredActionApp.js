@@ -76,6 +76,7 @@ const FocusedInspiredActionApp = () => {
 // Timer State
   const [activeTimers, setActiveTimers] = useState({});
   const timerIntervals = useRef({});
+const tasksRef = useRef(tasks);
 
   // Onboarding questions
   const onboardingQuestions = [
@@ -154,7 +155,7 @@ const FocusedInspiredActionApp = () => {
   };
 
 const updateTimerDisplay = (taskId) => {
-  const task = tasks.find(t => t.id === taskId);
+const task = tasksRef.current.find(t => t.id === taskId);
   if (!task) return;
 
   let currentTime = task.timer_total_time || 0;
@@ -352,6 +353,11 @@ const handleStartTimer = async (taskId) => {
         updateTimerDisplay(task.id);
       }
     });
+
+// Add this new useEffect right here:
+useEffect(() => {
+  tasksRef.current = tasks;
+}, [tasks]);
 
     // Cleanup intervals for tasks that no longer exist
     Object.keys(timerIntervals.current).forEach(taskId => {
