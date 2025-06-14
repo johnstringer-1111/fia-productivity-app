@@ -354,11 +354,6 @@ const handleStartTimer = async (taskId) => {
       }
     });
 
-// Add this new useEffect right here:
-useEffect(() => {
-  tasksRef.current = tasks;
-}, [tasks]);
-
     // Cleanup intervals for tasks that no longer exist
     Object.keys(timerIntervals.current).forEach(taskId => {
       if (!tasks.find(t => t.id === taskId)) {
@@ -367,6 +362,11 @@ useEffect(() => {
       }
     });
   }, [tasks]);
+
+// Add the new useEffect HERE:
+useEffect(() => {
+  tasksRef.current = tasks;
+}, [tasks]);
 
   // Cleanup all intervals on unmount
   useEffect(() => {
