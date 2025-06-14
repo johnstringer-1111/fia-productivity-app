@@ -2144,60 +2144,60 @@ timer_last_paused: null
 </div>
 <div className="flex items-center space-x-2">
   {/* Timer Controls */}
-  {task.status !== 'completed' && (
-    <div className="flex items-center space-x-1">
-      {!task.timer_is_running && !task.timer_start_time && (
+{task.status !== 'completed' && (
+  <div className="flex items-center space-x-1">
+    {!task.timer_is_running && task.timer_total_time === 0 && (
+      <button
+        onClick={() => handleStartTimer(task.id)}
+        className="p-1.5 bg-green-100 text-green-600 hover:bg-green-200 rounded transition-colors"
+        title="Start timer"
+        disabled={loading}
+      >
+        <Play className="h-4 w-4" />
+      </button>
+    )}
+    {task.timer_is_running && (
+      <>
         <button
-          onClick={() => handleStartTimer(task.id)}
-          className="p-1.5 bg-green-100 text-green-600 hover:bg-green-200 rounded transition-colors"
-          title="Start timer"
+          onClick={() => handlePauseTimer(task.id)}
+          className="p-1.5 bg-yellow-100 text-yellow-600 hover:bg-yellow-200 rounded transition-colors"
+          title="Pause timer"
+          disabled={loading}
+        >
+          <Pause className="h-4 w-4" />
+        </button>
+        <button
+          onClick={() => handleStopTimer(task.id)}
+          className="p-1.5 bg-red-100 text-red-600 hover:bg-red-200 rounded transition-colors"
+          title="Stop timer"
+          disabled={loading}
+        >
+          <Square className="h-4 w-4" />
+        </button>
+      </>
+    )}
+    {!task.timer_is_running && task.timer_total_time > 0 && (
+      <>
+        <button
+          onClick={() => handleResumeTimer(task.id)}
+          className="p-1.5 bg-blue-100 text-blue-600 hover:bg-blue-200 rounded transition-colors"
+          title="Resume timer"
           disabled={loading}
         >
           <Play className="h-4 w-4" />
         </button>
-      )}
-      {task.timer_is_running && (
-        <>
-          <button
-            onClick={() => handlePauseTimer(task.id)}
-            className="p-1.5 bg-yellow-100 text-yellow-600 hover:bg-yellow-200 rounded transition-colors"
-            title="Pause timer"
-            disabled={loading}
-          >
-            <Pause className="h-4 w-4" />
-          </button>
-          <button
-            onClick={() => handleStopTimer(task.id)}
-            className="p-1.5 bg-red-100 text-red-600 hover:bg-red-200 rounded transition-colors"
-            title="Stop timer"
-            disabled={loading}
-          >
-            <Square className="h-4 w-4" />
-          </button>
-        </>
-      )}
-      {!task.timer_is_running && task.timer_total_time > 0 && (
-        <>
-          <button
-            onClick={() => handleResumeTimer(task.id)}
-            className="p-1.5 bg-blue-100 text-blue-600 hover:bg-blue-200 rounded transition-colors"
-            title="Resume timer"
-            disabled={loading}
-          >
-            <Play className="h-4 w-4" />
-          </button>
-          <button
-            onClick={() => handleStopTimer(task.id)}
-            className="p-1.5 bg-red-100 text-red-600 hover:bg-red-200 rounded transition-colors"
-            title="Stop timer"
-            disabled={loading}
-          >
-            <Square className="h-4 w-4" />
-          </button>
-        </>
-      )}
-    </div>
-  )}
+        <button
+          onClick={() => handleStopTimer(task.id)}
+          className="p-1.5 bg-red-100 text-red-600 hover:bg-red-200 rounded transition-colors"
+          title="Stop timer"
+          disabled={loading}
+        >
+          <Square className="h-4 w-4" />
+        </button>
+      </>
+    )}
+  </div>
+)}
   
   <span className={`px-2 py-1 rounded-full text-xs font-medium ${getPriorityColor(task.priority)}`}>
     {task.priority}
