@@ -2214,21 +2214,6 @@ timer_last_paused: null
     <Trash2 className="h-4 w-4" />
   </button>
 </div>
-  )}
-  
-  <span className={`px-2 py-1 rounded-full text-xs font-medium ${getPriorityColor(task.priority)}`}>
-                        <button
-                          onClick={() => {
-                            if (window.confirm('Are you sure you want to delete this task?')) {
-                              removeTask(task.id);
-                            }
-                          }}
-                          className="opacity-0 group-hover:opacity-100 p-1 text-gray-400 hover:text-red-600 transition-all duration-200"
-                          title="Delete task"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
-                      </div>
                     </div>
                   ))
                 )}
