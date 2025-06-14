@@ -2105,44 +2105,44 @@ timer_last_paused: null
                         className="h-5 w-5 text-indigo-600 rounded"
                       />
                       <div className="flex-1">
-                        <div className="flex items-center space-x-2 mb-1">
-                          <h4 className={`font-medium ${task.status === 'completed' ? 'line-through text-gray-500' : 'text-gray-900'}`}>
-                            {task.title}
-                          </h4>
-                          {task.voice_input && (
-                            <Mic className="h-4 w-4 text-indigo-500" title="Created via voice input" />
-                          )}
-                          {task.imported_from_simpleology && (
-                            <Target className="h-4 w-4 text-green-500" title="Imported from Simpleology" />
-                          )}
-                        </div>
-                        {task.description && (
-                          <p className="text-sm text-gray-600 mb-1">{task.description}</p>
-                        )}
-                        <div className="flex items-center space-x-3 text-xs text-gray-500">
-                          {task.due_date && (
-                            <span>Due: {new Date(task.due_date).toLocaleDateString()}</span>
-                          )}
-                          {task.estimated_duration && (
-                            <span>{task.estimated_duration} min</span>
-                          )}
-{(task.timer_total_time > 0 || task.timer_is_running) && (
-  <span className="flex items-center">
-    <Timer className="h-3 w-3 mr-1" />
-    {formatTime(activeTimers[task.id] || task.timer_total_time || 0)}
-    {task.timer_pause_count > 0 && (
-      <span className="ml-1 text-gray-400">
-        ({task.timer_pause_count} pauses)
+  <div className="flex items-center space-x-2 mb-1">
+    <h4 className={`font-medium ${task.status === 'completed' ? 'line-through text-gray-500' : 'text-gray-900'}`}>
+      {task.title}
+    </h4>
+    {task.voice_input && (
+      <Mic className="h-4 w-4 text-indigo-500" title="Created via voice input" />
+    )}
+    {task.imported_from_simpleology && (
+      <Target className="h-4 w-4 text-green-500" title="Imported from Simpleology" />
+    )}
+  </div>
+  {task.description && (
+    <p className="text-sm text-gray-600 mb-1">{task.description}</p>
+  )}
+  <div className="flex items-center space-x-3 text-xs text-gray-500">
+    {task.due_date && (
+      <span>Due: {new Date(task.due_date).toLocaleDateString()}</span>
+    )}
+    {task.estimated_duration && (
+      <span>Est: {task.estimated_duration} min</span>
+    )}
+    {(task.timer_total_time > 0 || task.timer_is_running) && (
+      <span className="flex items-center">
+        <Timer className="h-3 w-3 mr-1" />
+        {formatTime(activeTimers[task.id] || task.timer_total_time || 0)}
+        {task.timer_pause_count > 0 && (
+          <span className="ml-1 text-gray-400">
+            ({task.timer_pause_count} pauses)
+          </span>
+        )}
       </span>
     )}
-  </span>
-)}
-                          {task.completed_at && (
-                            <span>Completed: {new Date(task.completed_at).toLocaleDateString()}</span>
-                          )}
-                        </div>
-                      </div>
-                      <div className="flex items-center space-x-2">
+    {task.completed_at && (
+      <span>Done: {new Date(task.completed_at).toLocaleDateString()}</span>
+    )}
+  </div>
+</div>
+<div className="flex items-center space-x-2">
   {/* Timer Controls */}
   {task.status !== 'completed' && (
     <div className="flex items-center space-x-1">
@@ -2197,6 +2197,23 @@ timer_last_paused: null
         </>
       )}
     </div>
+  )}
+  
+  <span className={`px-2 py-1 rounded-full text-xs font-medium ${getPriorityColor(task.priority)}`}>
+    {task.priority}
+  </span>
+  <button
+    onClick={() => {
+      if (window.confirm('Are you sure you want to delete this task?')) {
+        removeTask(task.id);
+      }
+    }}
+    className="opacity-0 group-hover:opacity-100 p-1 text-gray-400 hover:text-red-600 transition-all duration-200"
+    title="Delete task"
+  >
+    <Trash2 className="h-4 w-4" />
+  </button>
+</div>
   )}
   
   <span className={`px-2 py-1 rounded-full text-xs font-medium ${getPriorityColor(task.priority)}`}>
