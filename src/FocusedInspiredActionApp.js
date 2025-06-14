@@ -153,59 +153,62 @@ const FocusedInspiredActionApp = () => {
     return `${minutes}:${secs.toString().padStart(2, '0')}`;
   };
 
-  const updateTimerDisplay = (taskId) => {
-    const task = tasks.find(t => t.id === taskId);
-    if (!task) return;
+const updateTimerDisplay = (taskId) => {
+  const task = tasks.find(t => t.id === taskId);
+  if (!task) return;
 
-    let currentTime = task.timer_total_time || 0;
+  let currentTime = task.timer_total_time || 0;
+  
+  if (task.timer_is_running && task.timer_start_time) {
+    const startTime = typeof task.timer_start_time === 'string' 
+      ? new Date(task.timer_start_time).getTime() 
+      : task.timer_start_time;
+    const elapsed = Math.floor((Date.now() - startTime) / 1000);
+    currentTime += elapsed;
+  }
+
+  setActiveTimers(prev => ({
+    ...prev,
+    [taskId]: currentTime
+  }));
+};
+
+const handleStartTimer = async (taskId) => {
+  try {
+    const result = await startTaskTimer(taskId, user.id);
     
-    if (task.timer_is_running && task.timer_start_time) {
-      const elapsed = Math.floor((Date.now() - new Date(task.timer_start_time).getTime()) / 1000);
-      currentTime += elapsed;
-    }
+    if (result.success) {
+      // Update task in state with the ACTUAL data from the result
+      setTasks(prev => prev.map(task => 
+        task.id === taskId 
+          ? { 
+              ...task, 
+              timer_is_running: true,
+              timer_start_time: result.task.timer_start_time || new Date().toISOString(),
+              timer_total_time: result.task.timer_total_time || 0,
+              timer_pause_count: result.task.timer_pause_count || 0
+            }
+          : task
+      ));
 
-    setActiveTimers(prev => ({
-      ...prev,
-      [taskId]: currentTime
-    }));
-  };
-
-  const handleStartTimer = async (taskId) => {
-    try {
-
-      const result = await startTaskTimer(taskId, user.id);
-      
-      if (result.success) {
-        // Update task in state
-        setTasks(prev => prev.map(task => 
-          task.id === taskId 
-            ? { 
-                ...task, 
-                timer_is_running: true,
-                timer_start_time: result.task.timer_start_time,
-                timer_total_time: result.task.timer_total_time,
-                timer_pause_count: result.task.timer_pause_count
-              }
-            : task
-        ));
-
-        // Start interval for real-time display
-        if (timerIntervals.current[taskId]) {
-          clearInterval(timerIntervals.current[taskId]);
-        }
-        
-        timerIntervals.current[taskId] = setInterval(() => {
-          updateTimerDisplay(taskId);
-        }, 1000);
-      } else {
-        alert('Failed to start timer: ' + result.error);
+      // Start interval for real-time display
+      if (timerIntervals.current[taskId]) {
+        clearInterval(timerIntervals.current[taskId]);
       }
-    } catch (error) {
-      alert('Error starting timer');
-    } finally {
-
+      
+      // Add immediate update before starting interval
+      updateTimerDisplay(taskId);
+      
+      timerIntervals.current[taskId] = setInterval(() => {
+        updateTimerDisplay(taskId);
+      }, 1000);
+    } else {
+      alert('Failed to start timer: ' + result.error);
     }
-  };
+  } catch (error) {
+    alert('Error starting timer');
+  }
+};
 
   const handlePauseTimer = async (taskId) => {
     try {
