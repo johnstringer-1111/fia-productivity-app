@@ -350,60 +350,45 @@ const handleStartTimer = async (taskId) => {
   }
 };
 
-  // Initialize timers for tasks that are running
+  /// Initialize timers for tasks that are running
 useEffect(() => {
   tasks.forEach(task => {
-    // Initialize display for any task with time
-    if (task.timer_total_time > 0) {
-      setActiveTimers(prev => ({
-        ...prev,
-        [task.id]: task.timer_total_time
-      }));
-    }
+    // Skip if no timer data
+    if (!task.timer_total_time && !task.timer_is_running) return;
     
-    if (task.timer_is_running && task.timer_start_time) {
-      // For running timers, calculate total time including current session
-      const startTime = new Date(task.timer_start_time).getTime();
-      const now = Date.now();
-      const sessionElapsed = Math.floor((now - startTime) / 1000);
-      const totalTime = (task.timer_total_time || 0) + sessionElapsed;
-      
-      // Set the initial display value
-      setActiveTimers(prev => ({
-        ...prev,
-        [task.id]: totalTime
-      }));
-      
-      // Start interval to continue counting
-      if (!timerIntervals.current[task.id]) {
-        timerIntervals.current[task.id] = setInterval(() => {
-          setActiveTimers(prev => ({
-            ...prev,
-            [task.id]: prev[task.id] + 1
-          }));
-        }, 1000);
+    // Set initial display value
+    let displayTime = task.timer_total_time || 0;
+    
+    // If timer is running, start counting from current total
+    if (task.timer_is_running) {
+      // Clear any existing interval
+      if (timerIntervals.current[task.id]) {
+        clearInterval(timerIntervals.current[task.id]);
       }
+      
+      // Start counting from the stored total time
+      let counter = displayTime;
+      setActiveTimers(prev => ({ ...prev, [task.id]: counter }));
+      
+      timerIntervals.current[task.id] = setInterval(() => {
+        counter += 1;
+        setActiveTimers(prev => ({ ...prev, [task.id]: counter }));
+      }, 1000);
+    } else {
+      // Just display the stored time for paused/stopped timers
+      setActiveTimers(prev => ({ ...prev, [task.id]: displayTime }));
     }
   });
 
-  // Cleanup intervals for tasks that no longer exist
-  Object.keys(timerIntervals.current).forEach(taskId => {
-    if (!tasks.find(t => t.id === taskId)) {
-      clearInterval(timerIntervals.current[taskId]);
-      delete timerIntervals.current[taskId];
-    }
-  });
-  
-  // Cleanup activeTimers for tasks that no longer exist
-  setActiveTimers(prev => {
-    const newTimers = {};
-    Object.keys(prev).forEach(taskId => {
-      if (tasks.find(t => t.id === taskId)) {
-        newTimers[taskId] = prev[taskId];
+  // Cleanup
+  return () => {
+    Object.keys(timerIntervals.current).forEach(taskId => {
+      if (!tasks.find(t => t.id === taskId)) {
+        clearInterval(timerIntervals.current[taskId]);
+        delete timerIntervals.current[taskId];
       }
     });
-    return newTimers;
-  });
+  };
 }, [tasks]);
 
 // Add the new useEffect HERE:
