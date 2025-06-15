@@ -218,24 +218,25 @@ const handleStartTimer = async (taskId) => {
     // Get current timer value before pausing
     const currentTimerValue = activeTimers[taskId] || 0;
     
-    const result = await pauseTaskTimer(taskId, user.id);
+    // Clear interval first
+    if (timerIntervals.current[taskId]) {
+      clearInterval(timerIntervals.current[taskId]);
+      delete timerIntervals.current[taskId];
+    }
+    
+    // Pass the current time to the pause function
+    const result = await pauseTaskTimer(taskId, user.id, currentTimerValue);
     
     if (result.success) {
-      // Clear interval
-      if (timerIntervals.current[taskId]) {
-        clearInterval(timerIntervals.current[taskId]);
-        delete timerIntervals.current[taskId];
-      }
-
-      // Update task in state with the current timer value
+      // Update task in state
       setTasks(prev => prev.map(task => 
         task.id === taskId 
           ? { 
               ...task, 
               timer_is_running: false,
-              timer_total_time: currentTimerValue, // Use the actual displayed time
-              timer_pause_count: (task.timer_pause_count || 0) + 1,
-              timer_last_paused: new Date().toISOString()
+              timer_total_time: currentTimerValue,
+              timer_pause_count: result.task.timer_pause_count,
+              timer_last_paused: result.task.timer_last_paused
             }
           : task
       ));
