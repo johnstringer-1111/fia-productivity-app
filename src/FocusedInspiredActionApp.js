@@ -362,13 +362,25 @@ useEffect(() => {
     }
     
     if (task.timer_is_running && task.timer_start_time) {
-      // Update display immediately
-      updateTimerDisplay(task.id);
+      // For running timers, calculate total time including current session
+      const startTime = new Date(task.timer_start_time).getTime();
+      const now = Date.now();
+      const sessionElapsed = Math.floor((now - startTime) / 1000);
+      const totalTime = (task.timer_total_time || 0) + sessionElapsed;
       
-      // Start interval if not already running
+      // Set the initial display value
+      setActiveTimers(prev => ({
+        ...prev,
+        [task.id]: totalTime
+      }));
+      
+      // Start interval to continue counting
       if (!timerIntervals.current[task.id]) {
         timerIntervals.current[task.id] = setInterval(() => {
-          updateTimerDisplay(task.id);
+          setActiveTimers(prev => ({
+            ...prev,
+            [task.id]: prev[task.id] + 1
+          }));
         }, 1000);
       }
     }
@@ -380,6 +392,17 @@ useEffect(() => {
       clearInterval(timerIntervals.current[taskId]);
       delete timerIntervals.current[taskId];
     }
+  });
+  
+  // Cleanup activeTimers for tasks that no longer exist
+  setActiveTimers(prev => {
+    const newTimers = {};
+    Object.keys(prev).forEach(taskId => {
+      if (tasks.find(t => t.id === taskId)) {
+        newTimers[taskId] = prev[taskId];
+      }
+    });
+    return newTimers;
   });
 }, [tasks]);
 
