@@ -421,19 +421,14 @@ export const pauseTaskTimer = async (taskId, userId) => {
 
     if (fetchError) throw fetchError;
 
-    // Calculate elapsed time since last start
-    const startTime = new Date(taskData.timer_start_time);
-    const elapsedSeconds = Math.floor((new Date(now) - startTime) / 1000);
-    const newTotalTime = (taskData.timer_total_time || 0) + elapsedSeconds;
-
-    // Update task
+    // Don't calculate elapsed time - that's handled by the frontend
+    // Just update the task state
     const { data: updatedTask, error: updateError } = await supabase
       .from('tasks')
       .update({
-        timer_total_time: newTotalTime,
-        timer_pause_count: (taskData.timer_pause_count || 0) + 1,
         timer_is_running: false,
         timer_last_paused: now,
+        timer_pause_count: (taskData.timer_pause_count || 0) + 1,
         updated_at: now
       })
       .eq('id', taskId)
@@ -441,27 +436,6 @@ export const pauseTaskTimer = async (taskId, userId) => {
       .single();
 
     if (updateError) throw updateError;
-
-    // Get current session to update pause count
-    const { data: sessionData, error: sessionFetchError } = await supabase
-      .from('timer_sessions')
-      .select('pause_count')
-      .eq('task_id', taskId)
-      .is('end_time', null)
-      .single();
-
-    if (!sessionFetchError && sessionData) {
-      // Update current session pause count
-      const { error: sessionError } = await supabase
-        .from('timer_sessions')
-        .update({
-          pause_count: (sessionData.pause_count || 0) + 1
-        })
-        .eq('task_id', taskId)
-        .is('end_time', null);
-
-      if (sessionError) throw sessionError;
-    }
 
     return { success: true, task: updatedTask };
   } catch (error) {
