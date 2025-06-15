@@ -408,7 +408,7 @@ export const startTaskTimer = async (taskId, userId) => {
   }
 };
 
-export const pauseTaskTimer = async (taskId, userId) => {
+export const pauseTaskTimer = async (taskId, userId, totalTime) => {
   try {
     const now = new Date().toISOString();
     
@@ -421,14 +421,15 @@ export const pauseTaskTimer = async (taskId, userId) => {
 
     if (fetchError) throw fetchError;
 
-    // Don't calculate elapsed time - that's handled by the frontend
-    // Just update the task state
+    // Update task with the total time
     const { data: updatedTask, error: updateError } = await supabase
       .from('tasks')
       .update({
+        timer_total_time: totalTime || 0,  // Save the actual total time
         timer_is_running: false,
         timer_last_paused: now,
         timer_pause_count: (taskData.timer_pause_count || 0) + 1,
+        timer_start_time: null,  // Clear start time when paused
         updated_at: now
       })
       .eq('id', taskId)
