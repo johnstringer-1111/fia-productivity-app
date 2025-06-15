@@ -179,32 +179,34 @@ const handleStartTimer = async (taskId) => {
     const result = await startTaskTimer(taskId, user.id);
     
     if (result.success) {
-      // Update task in state with the ACTUAL data from the result
+      // Update task in state
       setTasks(prev => prev.map(task => 
         task.id === taskId 
           ? { 
               ...task, 
               timer_is_running: true,
-              timer_start_time: result.task.timer_start_time || new Date().toISOString(),
-              timer_total_time: result.task.timer_total_time || 0,
-              timer_pause_count: result.task.timer_pause_count || 0
+              timer_start_time: new Date().toISOString(),
+              timer_total_time: task.timer_total_time || 0,
+              timer_pause_count: task.timer_pause_count || 0
             }
           : task
       ));
 
-      // Start interval for real-time display
+      // Simple interval that counts from 0
       if (timerIntervals.current[taskId]) {
         clearInterval(timerIntervals.current[taskId]);
       }
       
-      // Add immediate update before starting interval
-      updateTimerDisplay(taskId);
+      const startTime = Date.now();
+      const initialTime = 0; // Always start from 0 for new timer
       
       timerIntervals.current[taskId] = setInterval(() => {
-        updateTimerDisplay(taskId);
+        const elapsed = Math.floor((Date.now() - startTime) / 1000);
+        setActiveTimers(prev => ({
+          ...prev,
+          [taskId]: initialTime + elapsed
+        }));
       }, 1000);
-    } else {
-      alert('Failed to start timer: ' + result.error);
     }
   } catch (error) {
     alert('Error starting timer');
@@ -212,156 +214,174 @@ const handleStartTimer = async (taskId) => {
 };
 
   const handlePauseTimer = async (taskId) => {
-    try {
-      const result = await pauseTaskTimer(taskId, user.id);
-      
-      if (result.success) {
-        // Clear interval
-        if (timerIntervals.current[taskId]) {
-          clearInterval(timerIntervals.current[taskId]);
-          delete timerIntervals.current[taskId];
-        }
-
-        // Update task in state
-        setTasks(prev => prev.map(task => 
-          task.id === taskId 
-            ? { 
-                ...task, 
-                timer_is_running: false,
-                timer_total_time: result.task.timer_total_time,
-                timer_pause_count: result.task.timer_pause_count,
-                timer_last_paused: result.task.timer_last_paused
-              }
-            : task
-        ));
-
-        // Update display
-        updateTimerDisplay(taskId);
-      } else {
-        alert('Failed to pause timer: ' + result.error);
-      }
-    } catch (error) {
-      alert('Error pausing timer');
-    } finally {
-    }
-  };
-
-  const handleResumeTimer = async (taskId) => {
-    try {
-
-      const result = await resumeTaskTimer(taskId, user.id);
-      
-      if (result.success) {
-        // Update task in state
-        setTasks(prev => prev.map(task => 
-          task.id === taskId 
-            ? { 
-                ...task, 
-                timer_is_running: true,
-                timer_start_time: result.task.timer_start_time
-              }
-            : task
-        ));
-
-        // Start interval
-        if (timerIntervals.current[taskId]) {
-          clearInterval(timerIntervals.current[taskId]);
-        }
-        
-        timerIntervals.current[taskId] = setInterval(() => {
-          updateTimerDisplay(taskId);
-        }, 1000);
-      } else {
-        alert('Failed to resume timer: ' + result.error);
-      }
-    } catch (error) {
-      alert('Error resuming timer');
-    } finally {
-    }
-  };
-
-  const handleStopTimer = async (taskId) => {
-    try {
-
-      const result = await stopTaskTimer(taskId, user.id);
-      
-      if (result.success) {
-        // Clear interval
-        if (timerIntervals.current[taskId]) {
-          clearInterval(timerIntervals.current[taskId]);
-          delete timerIntervals.current[taskId];
-        }
-
-        // Update task in state
-        setTasks(prev => prev.map(task => 
-          task.id === taskId 
-            ? { 
-                ...task, 
-                timer_is_running: false,
-                timer_start_time: null,
-                timer_total_time: result.task.timer_total_time
-              }
-            : task
-        ));
-
-        // Update display
-        updateTimerDisplay(taskId);
-
-        // Show completion message with time comparison
-        const task = tasks.find(t => t.id === taskId);
-        if (task && task.estimated_duration) {
-          const actualMinutes = Math.round(result.task.timer_total_time / 60);
-          const estimatedMinutes = task.estimated_duration;
-          const difference = actualMinutes - estimatedMinutes;
-          
-          let message = `Task timer stopped. Total time: ${formatTime(result.task.timer_total_time)}`;
-          if (difference > 0) {
-            message += `\n\nTook ${difference} minutes longer than estimated (${estimatedMinutes} min)`;
-          } else if (difference < 0) {
-            message += `\n\nCompleted ${Math.abs(difference)} minutes faster than estimated (${estimatedMinutes} min)`;
-          } else {
-            message += `\n\nCompleted exactly on time! (${estimatedMinutes} min)`;
-          }
-          
-          alert(message);
-        }
-      } else {
-        alert('Failed to stop timer: ' + result.error);
-      }
-    } catch (error) {
-      alert('Error stopping timer');
-    } finally {
-
-    }
-  };
-
-  // Initialize timers for tasks that are running
-  useEffect(() => {
-    tasks.forEach(task => {
-      if (task.timer_is_running && task.timer_start_time) {
-        // Update display immediately
-        updateTimerDisplay(task.id);
-        
-        // Start interval if not already running
-        if (!timerIntervals.current[task.id]) {
-          timerIntervals.current[task.id] = setInterval(() => {
-            updateTimerDisplay(task.id);
-          }, 1000);
-        }
-      } else if (task.timer_total_time > 0) {
-        // Just update display for tasks with time but not running
-        updateTimerDisplay(task.id);
-      }
-    });
-
-    // Cleanup intervals for tasks that no longer exist
-    Object.keys(timerIntervals.current).forEach(taskId => {
-      if (!tasks.find(t => t.id === taskId)) {
+  try {
+    // Get current timer value before pausing
+    const currentTimerValue = activeTimers[taskId] || 0;
+    
+    const result = await pauseTaskTimer(taskId, user.id);
+    
+    if (result.success) {
+      // Clear interval
+      if (timerIntervals.current[taskId]) {
         clearInterval(timerIntervals.current[taskId]);
         delete timerIntervals.current[taskId];
       }
-    });
-  }, [tasks]);
+
+      // Update task in state with the current timer value
+      setTasks(prev => prev.map(task => 
+        task.id === taskId 
+          ? { 
+              ...task, 
+              timer_is_running: false,
+              timer_total_time: currentTimerValue, // Use the actual displayed time
+              timer_pause_count: (task.timer_pause_count || 0) + 1,
+              timer_last_paused: new Date().toISOString()
+            }
+          : task
+      ));
+
+      // Keep the display showing the current time
+      setActiveTimers(prev => ({
+        ...prev,
+        [taskId]: currentTimerValue
+      }));
+    } else {
+      alert('Failed to pause timer: ' + result.error);
+    }
+  } catch (error) {
+    alert('Error pausing timer');
+  }
+};
+
+  const handleResumeTimer = async (taskId) => {
+  try {
+    const result = await resumeTaskTimer(taskId, user.id);
+    
+    if (result.success) {
+      // Get the current displayed time (what was saved during pause)
+      const previousTime = activeTimers[taskId] || 0;
+      
+      // Update task in state
+      setTasks(prev => prev.map(task => 
+        task.id === taskId 
+          ? { 
+              ...task, 
+              timer_is_running: true,
+              timer_start_time: new Date().toISOString()
+            }
+          : task
+      ));
+
+      // Start interval from previous time
+      if (timerIntervals.current[taskId]) {
+        clearInterval(timerIntervals.current[taskId]);
+      }
+      
+      const startTime = Date.now();
+      
+      timerIntervals.current[taskId] = setInterval(() => {
+        const elapsed = Math.floor((Date.now() - startTime) / 1000);
+        setActiveTimers(prev => ({
+          ...prev,
+          [taskId]: previousTime + elapsed
+        }));
+      }, 1000);
+    }
+  } catch (error) {
+    alert('Error resuming timer');
+  }
+};
+
+  const handleStopTimer = async (taskId) => {
+  try {
+    // Get current timer value before stopping
+    const finalTime = activeTimers[taskId] || 0;
+    
+    const result = await stopTaskTimer(taskId, user.id);
+    
+    if (result.success) {
+      // Clear interval
+      if (timerIntervals.current[taskId]) {
+        clearInterval(timerIntervals.current[taskId]);
+        delete timerIntervals.current[taskId];
+      }
+
+      // Update task in state
+      setTasks(prev => prev.map(task => 
+        task.id === taskId 
+          ? { 
+              ...task, 
+              timer_is_running: false,
+              timer_start_time: null,
+              timer_total_time: finalTime // Use the displayed time
+            }
+          : task
+      ));
+
+      // Update display
+      setActiveTimers(prev => ({
+        ...prev,
+        [taskId]: finalTime
+      }));
+
+      // Show completion message with time comparison
+      const task = tasks.find(t => t.id === taskId);
+      if (task && task.estimated_duration) {
+        const actualMinutes = Math.round(finalTime / 60);
+        const estimatedMinutes = task.estimated_duration;
+        const difference = actualMinutes - estimatedMinutes;
+        
+        let message = `Task timer stopped. Total time: ${formatTime(finalTime)}`;
+        if (difference > 0) {
+          message += `\n\nTook ${difference} minutes longer than estimated (${estimatedMinutes} min)`;
+        } else if (difference < 0) {
+          message += `\n\nCompleted ${Math.abs(difference)} minutes faster than estimated (${estimatedMinutes} min)`;
+        } else {
+          message += `\n\nCompleted exactly on time! (${estimatedMinutes} min)`;
+        }
+        
+        alert(message);
+      }
+    } else {
+      alert('Failed to stop timer: ' + result.error);
+    }
+  } catch (error) {
+    alert('Error stopping timer');
+  }
+};
+
+  // Initialize timers for tasks that are running
+useEffect(() => {
+  tasks.forEach(task => {
+    // Initialize display for any task with time
+    if (task.timer_total_time > 0) {
+      setActiveTimers(prev => ({
+        ...prev,
+        [task.id]: task.timer_total_time
+      }));
+    }
+    
+    if (task.timer_is_running && task.timer_start_time) {
+      // Update display immediately
+      updateTimerDisplay(task.id);
+      
+      // Start interval if not already running
+      if (!timerIntervals.current[task.id]) {
+        timerIntervals.current[task.id] = setInterval(() => {
+          updateTimerDisplay(task.id);
+        }, 1000);
+      }
+    }
+  });
+
+  // Cleanup intervals for tasks that no longer exist
+  Object.keys(timerIntervals.current).forEach(taskId => {
+    if (!tasks.find(t => t.id === taskId)) {
+      clearInterval(timerIntervals.current[taskId]);
+      delete timerIntervals.current[taskId];
+    }
+  });
+}, [tasks]);
 
 // Add the new useEffect HERE:
 useEffect(() => {
