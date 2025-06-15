@@ -25,6 +25,7 @@ import {
   stopTaskTimer,
   getTaskTimerData
 } from './utils/supabase';
+import supabase from './utils/supabase';
 
 const FocusedInspiredActionApp = () => {
   // Core State
