@@ -398,8 +398,32 @@ useEffect(() => {
   tasksRef.current = tasks;
 }, [tasks]);
 
-  // Cleanup all intervals on unmount
-  useEffect(() => {
+// Auto-save running timers every 10 seconds
+useEffect(() => {
+  const autoSaveInterval = setInterval(() => {
+    tasks.forEach(async (task) => {
+      if (task.timer_is_running && activeTimers[task.id] > 0) {
+        // Silently save the current time to database
+        try {
+          await supabase
+            .from('tasks')
+            .update({ 
+              timer_total_time: activeTimers[task.id],
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', task.id);
+        } catch (error) {
+          // Silent fail - don't interrupt user
+        }
+      }
+    });
+  }, 10000); // Every 10 seconds
+
+  return () => clearInterval(autoSaveInterval);
+}, [tasks, activeTimers]);
+
+// Cleanup all intervals on unmount
+useEffect(() => {
     return () => {
       Object.values(timerIntervals.current).forEach(interval => {
         clearInterval(interval);
