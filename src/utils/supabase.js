@@ -376,6 +376,7 @@ export const startTaskTimer = async (taskId, userId) => {
       .update({
         timer_start_time: now,
         timer_is_running: true,
+        timer_total_time: 0,  // Always 0 when running - elapsed time calculated from start_time
         updated_at: now
       })
       .eq('id', taskId)
