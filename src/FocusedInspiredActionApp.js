@@ -356,27 +356,29 @@ const handleStartTimer = async (taskId) => {
 useEffect(() => {
   tasks.forEach(task => {
     if (task.timer_is_running && task.timer_start_time) {
-      // Calculate how long the timer has been running since start
+      // For RUNNING timers, calculate time from start (ignore timer_total_time)
       const startTime = new Date(task.timer_start_time).getTime();
       const now = Date.now();
       const elapsed = Math.floor((now - startTime) / 1000);
       
-      // Total time is saved time plus current session
-      const totalTime = (task.timer_total_time || 0) + elapsed;
+      // Sanity check
+      if (elapsed < 0 || elapsed > 86400 * 7) { // More than a week
+        return;
+      }
       
-      // Set display
-      setActiveTimers(prev => ({ ...prev, [task.id]: totalTime }));
+      // Display the elapsed time (NOT adding timer_total_time)
+      setActiveTimers(prev => ({ ...prev, [task.id]: elapsed }));
       
-      // Start interval from this total
+      // Continue counting from elapsed
       if (!timerIntervals.current[task.id]) {
-        let currentCount = totalTime;
+        let counter = elapsed;
         timerIntervals.current[task.id] = setInterval(() => {
-          currentCount += 1;
-          setActiveTimers(prev => ({ ...prev, [task.id]: currentCount }));
+          counter += 1;
+          setActiveTimers(prev => ({ ...prev, [task.id]: counter }));
         }, 1000);
       }
     } else if (task.timer_total_time > 0) {
-      // Just show saved time for paused tasks
+      // For PAUSED timers, show the saved total
       setActiveTimers(prev => ({ ...prev, [task.id]: task.timer_total_time }));
     }
   });
