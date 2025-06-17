@@ -180,6 +180,9 @@ const handleStartTimer = async (taskId) => {
     const result = await startTaskTimer(taskId, user.id);
     
     if (result.success) {
+      const task = tasks.find(t => t.id === taskId);
+      const previousTime = task?.timer_total_time || 0;
+      
       // Update task in state
       setTasks(prev => prev.map(task => 
         task.id === taskId 
@@ -187,26 +190,23 @@ const handleStartTimer = async (taskId) => {
               ...task, 
               timer_is_running: true,
               timer_start_time: new Date().toISOString(),
-              timer_total_time: task.timer_total_time || 0,
+              timer_total_time: previousTime, // Keep existing time
               timer_pause_count: task.timer_pause_count || 0
             }
           : task
       ));
 
-      // Simple interval that counts from 0
+      // Start counting from previous time
+      let counter = previousTime;
+      setActiveTimers(prev => ({ ...prev, [taskId]: counter }));
+      
       if (timerIntervals.current[taskId]) {
         clearInterval(timerIntervals.current[taskId]);
       }
       
-      const startTime = Date.now();
-      const initialTime = 0; // Always start from 0 for new timer
-      
       timerIntervals.current[taskId] = setInterval(() => {
-        const elapsed = Math.floor((Date.now() - startTime) / 1000);
-        setActiveTimers(prev => ({
-          ...prev,
-          [taskId]: initialTime + elapsed
-        }));
+        counter += 1;
+        setActiveTimers(prev => ({ ...prev, [taskId]: counter }));
       }, 1000);
     }
   } catch (error) {
@@ -352,33 +352,32 @@ const handleStartTimer = async (taskId) => {
   }
 };
 
-  /// Initialize timers for tasks that are running
+  // Initialize timers for tasks that are running
 useEffect(() => {
   tasks.forEach(task => {
-    // Skip if no timer data
-    if (!task.timer_total_time && !task.timer_is_running) return;
-    
-    // Set initial display value
-    let displayTime = task.timer_total_time || 0;
-    
-    // If timer is running, start counting from current total
-    if (task.timer_is_running) {
-      // Clear any existing interval
-      if (timerIntervals.current[task.id]) {
-        clearInterval(timerIntervals.current[task.id]);
+    if (task.timer_is_running && task.timer_start_time) {
+      // Calculate how long the timer has been running since start
+      const startTime = new Date(task.timer_start_time).getTime();
+      const now = Date.now();
+      const elapsed = Math.floor((now - startTime) / 1000);
+      
+      // Total time is saved time plus current session
+      const totalTime = (task.timer_total_time || 0) + elapsed;
+      
+      // Set display
+      setActiveTimers(prev => ({ ...prev, [task.id]: totalTime }));
+      
+      // Start interval from this total
+      if (!timerIntervals.current[task.id]) {
+        let currentCount = totalTime;
+        timerIntervals.current[task.id] = setInterval(() => {
+          currentCount += 1;
+          setActiveTimers(prev => ({ ...prev, [task.id]: currentCount }));
+        }, 1000);
       }
-      
-      // Start counting from the stored total time
-      let counter = displayTime;
-      setActiveTimers(prev => ({ ...prev, [task.id]: counter }));
-      
-      timerIntervals.current[task.id] = setInterval(() => {
-        counter += 1;
-        setActiveTimers(prev => ({ ...prev, [task.id]: counter }));
-      }, 1000);
-    } else {
-      // Just display the stored time for paused/stopped timers
-      setActiveTimers(prev => ({ ...prev, [task.id]: displayTime }));
+    } else if (task.timer_total_time > 0) {
+      // Just show saved time for paused tasks
+      setActiveTimers(prev => ({ ...prev, [task.id]: task.timer_total_time }));
     }
   });
 
