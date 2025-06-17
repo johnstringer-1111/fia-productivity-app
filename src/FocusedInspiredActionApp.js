@@ -355,7 +355,17 @@ const handleStartTimer = async (taskId) => {
   // Initialize timers for tasks that are running
 useEffect(() => {
   tasks.forEach(task => {
+// DEBUG: See what we're actually getting
+    if (task.timer_is_running) {
+      console.log('Running timer task:', {
+        id: task.id,
+        timer_start_time: task.timer_start_time,
+        timer_total_time: task.timer_total_time,
+        timer_is_running: task.timer_is_running
+      });
+    }
     if (task.timer_is_running && task.timer_start_time) {
+
       // For RUNNING timers, calculate time from start (ignore timer_total_time)
       const startTime = new Date(task.timer_start_time).getTime();
       const now = Date.now();
