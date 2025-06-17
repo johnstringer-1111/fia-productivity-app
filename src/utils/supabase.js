@@ -365,19 +365,29 @@ export const saveMultipleTasks = async (userId, tasks) => {
   }
 };
 
-// TIMER FUNCTIONS - NEW FOR PHASE 1
+// FIXED SUPABASE TIMER FUNCTIONS - Replace the existing timer functions in your supabase.js
+
 export const startTaskTimer = async (taskId, userId) => {
   try {
-    // Use UTC explicitly
+    // 🔥 FIX: Ensure consistent UTC timestamp
     const now = new Date().toISOString();
     
-    // Update task with timer start info
+    // First, get current task state to preserve any existing total time
+    const { data: currentTask, error: fetchError } = await supabase
+      .from('tasks')
+      .select('timer_total_time')
+      .eq('id', taskId)
+      .single();
+    
+    if (fetchError) throw fetchError;
+    
+    // Update task with timer start info - keep existing total time for resumed timers
     const { data: taskData, error: taskError } = await supabase
       .from('tasks')
       .update({
         timer_start_time: now,
         timer_is_running: true,
-        timer_total_time: 0,
+        // Don't reset timer_total_time if this is a resume operation
         updated_at: now
       })
       .eq('id', taskId)
@@ -398,7 +408,10 @@ export const startTaskTimer = async (taskId, userId) => {
       .select()
       .single();
 
-    if (sessionError) throw sessionError;
+    if (sessionError) {
+      // Session creation failed, but timer start succeeded - continue anyway
+      console.warn('Timer session creation failed:', sessionError);
+    }
 
     return { 
       success: true, 
@@ -406,6 +419,7 @@ export const startTaskTimer = async (taskId, userId) => {
       session: sessionData 
     };
   } catch (error) {
+    console.error('startTaskTimer error:', error);
     return { success: false, error: error.message };
   }
 };
@@ -423,11 +437,25 @@ export const pauseTaskTimer = async (taskId, userId, totalTime) => {
 
     if (fetchError) throw fetchError;
 
+    // 🔥 FIX: Use the passed totalTime parameter, with fallback calculation
+    let finalTotalTime = totalTime;
+    
+    // Fallback: if totalTime wasn't provided, calculate from database
+    if (finalTotalTime === undefined || finalTotalTime === null) {
+      finalTotalTime = taskData.timer_total_time || 0;
+      
+      if (taskData.timer_is_running && taskData.timer_start_time) {
+        const startTime = new Date(taskData.timer_start_time);
+        const elapsedSeconds = Math.floor((new Date(now) - startTime) / 1000);
+        finalTotalTime += Math.max(0, elapsedSeconds); // Ensure non-negative
+      }
+    }
+
     // Update task with the total time
     const { data: updatedTask, error: updateError } = await supabase
       .from('tasks')
       .update({
-        timer_total_time: totalTime || 0,  // Save the actual total time
+        timer_total_time: finalTotalTime,
         timer_is_running: false,
         timer_last_paused: now,
         timer_pause_count: (taskData.timer_pause_count || 0) + 1,
@@ -440,8 +468,23 @@ export const pauseTaskTimer = async (taskId, userId, totalTime) => {
 
     if (updateError) throw updateError;
 
+    // End current timer session
+    const { error: sessionError } = await supabase
+      .from('timer_sessions')
+      .update({
+        end_time: now,
+        total_duration: finalTotalTime
+      })
+      .eq('task_id', taskId)
+      .is('end_time', null);
+
+    if (sessionError) {
+      console.warn('Timer session update failed:', sessionError);
+    }
+
     return { success: true, task: updatedTask };
   } catch (error) {
+    console.error('pauseTaskTimer error:', error);
     return { success: false, error: error.message };
   }
 };
@@ -450,7 +493,7 @@ export const resumeTaskTimer = async (taskId, userId) => {
   try {
     const now = new Date().toISOString();
     
-    // Resume timer by setting new start time
+    // Resume timer by setting new start time (keep existing timer_total_time)
     const { data: taskData, error: taskError } = await supabase
       .from('tasks')
       .update({
@@ -464,8 +507,25 @@ export const resumeTaskTimer = async (taskId, userId) => {
 
     if (taskError) throw taskError;
 
-    return { success: true, task: taskData };
+    // Create new timer session for the resumed session
+    const { data: sessionData, error: sessionError } = await supabase
+      .from('timer_sessions')
+      .insert([{
+        task_id: taskId,
+        user_id: userId,
+        start_time: now,
+        pause_count: taskData.timer_pause_count || 0
+      }])
+      .select()
+      .single();
+
+    if (sessionError) {
+      console.warn('Timer session creation failed on resume:', sessionError);
+    }
+
+    return { success: true, task: taskData, session: sessionData };
   } catch (error) {
+    console.error('resumeTaskTimer error:', error);
     return { success: false, error: error.message };
   }
 };
@@ -485,10 +545,11 @@ export const stopTaskTimer = async (taskId, userId) => {
 
     // Calculate final time if timer was running
     let finalTotalTime = taskData.timer_total_time || 0;
+    
     if (taskData.timer_is_running && taskData.timer_start_time) {
       const startTime = new Date(taskData.timer_start_time);
       const elapsedSeconds = Math.floor((new Date(now) - startTime) / 1000);
-      finalTotalTime += elapsedSeconds;
+      finalTotalTime += Math.max(0, elapsedSeconds); // Ensure non-negative
     }
 
     // Update task
@@ -516,10 +577,13 @@ export const stopTaskTimer = async (taskId, userId) => {
       .eq('task_id', taskId)
       .is('end_time', null);
 
-    if (sessionError) throw sessionError;
+    if (sessionError) {
+      console.warn('Timer session update failed on stop:', sessionError);
+    }
 
     return { success: true, task: updatedTask };
   } catch (error) {
+    console.error('stopTaskTimer error:', error);
     return { success: false, error: error.message };
   }
 };
