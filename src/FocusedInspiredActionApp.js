@@ -367,7 +367,7 @@ useEffect(() => {
     
     if (task.timer_is_running && task.timer_start_time) {
       // For RUNNING timers, calculate time from start (ignore timer_total_time)
-      const startTime = new Date(task.timer_start_time).getTime();
+      const startTime = Date.parse(task.timer_start_time);
       const now = Date.now();
       const elapsed = Math.floor((now - startTime) / 1000);
       
