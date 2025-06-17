@@ -368,6 +368,7 @@ export const saveMultipleTasks = async (userId, tasks) => {
 // TIMER FUNCTIONS - NEW FOR PHASE 1
 export const startTaskTimer = async (taskId, userId) => {
   try {
+    // Use UTC explicitly
     const now = new Date().toISOString();
     
     // Update task with timer start info
@@ -376,7 +377,7 @@ export const startTaskTimer = async (taskId, userId) => {
       .update({
         timer_start_time: now,
         timer_is_running: true,
-        timer_total_time: 0,  // Always 0 when running - elapsed time calculated from start_time
+        timer_total_time: 0,
         updated_at: now
       })
       .eq('id', taskId)
