@@ -364,20 +364,29 @@ useEffect(() => {
         timer_is_running: task.timer_is_running
       });
     }
+    
     if (task.timer_is_running && task.timer_start_time) {
-
       // For RUNNING timers, calculate time from start (ignore timer_total_time)
       const startTime = new Date(task.timer_start_time).getTime();
       const now = Date.now();
       const elapsed = Math.floor((now - startTime) / 1000);
       
+      // MORE DEBUG
+      console.log('Timer calculation:', {
+        startTime: startTime,
+        now: now,
+        elapsed: elapsed
+      });
+      
       // Sanity check
       if (elapsed < 0 || elapsed > 86400 * 7) { // More than a week
+        console.log('Failed sanity check, elapsed:', elapsed);
         return;
       }
       
       // Display the elapsed time (NOT adding timer_total_time)
       setActiveTimers(prev => ({ ...prev, [task.id]: elapsed }));
+      console.log('Set active timer for', task.id, 'to', elapsed);
       
       // Continue counting from elapsed
       if (!timerIntervals.current[task.id]) {
